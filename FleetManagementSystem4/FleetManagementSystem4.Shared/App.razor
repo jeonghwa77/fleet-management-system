@@ -1,0 +1,66 @@
+@page "/app"
+@using Microsoft.AspNetCore.Components
+@using FleetManagementSystem4.Shared.Pages
+@using FleetManagementSystem4.Shared.Services
+
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+@code {
+    private bool IsAuthChecking { get; set; } = true;
+    private bool IsAuthenticated => AuthService.IsAuthenticated;
+    private string? UserName => AuthService.UserName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: 실제 인증 상태 확인 로직(Supabase 등)
+        await Task.Delay(800); // 데모용
+        IsAuthChecking = false;
+    }
+
+    private async Task HandleSignIn(string email, string password)
+    {
+        IsAuthChecking = true;
+        var result = await AuthService.SignInAsync(email, password);
+        IsAuthChecking = false;
+        if (result)
+        {
+            NavigationManager.NavigateTo("/dashboard");
+        }
+    }
+
+    private void HandleSignOut()
+    {
+        AuthService.SignOut();
+        NavigationManager.NavigateTo("/");
+    }
+}
+
+@if (IsAuthChecking)
+{
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+        <div style="text-align:center;">
+            <div style="font-size:32px;">🔄</div>
+            <p>인증 상태를 확인하는 중...</p>
+        </div>
+    </div>
+}
+else if (!IsAuthenticated)
+{
+    <AuthScreen OnSignIn="@(args => HandleSignIn(args.Email, args.Password))" />
+}
+else
+{
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 32px;background:#ede9fe;">
+        <span>안녕하세요, <b>@UserName</b>님</span>
+        <button style="background:#b91c1c;color:white;padding:8px 16px;border-radius:8px;border:none;" @onclick="HandleSignOut">로그아웃</button>
+    </div>
+    <Router AppAssembly="typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" />
+        </Found>
+        <NotFound>
+            <p>페이지를 찾을 수 없습니다.</p>
+        </NotFound>
+    </Router>
+}

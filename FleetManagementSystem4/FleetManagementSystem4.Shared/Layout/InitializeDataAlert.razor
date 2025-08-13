@@ -1,0 +1,21 @@
+@* 데이터 초기화 알림 *@
+@code {
+    [Parameter] public bool IsInitialized { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool IsUsingMockData { get; set; }
+    [Parameter] public EventCallback OnInitialize { get; set; }
+}
+@if (!IsInitialized)
+{
+    <div class="alert alert-info">
+        <span>데이터가 초기화되지 않았습니다.</span>
+        @if (!Loading)
+        {
+            <button class="btn btn-sm" @onclick="OnInitialize">초기화</button>
+        }
+        else
+        {
+            <span>초기화 중...</span>
+        }
+    </div>
+}

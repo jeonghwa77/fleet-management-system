@@ -1,0 +1,13 @@
+@* 에러 알림 *@
+@code {
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public bool IsUsingMockData { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+}
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger">
+        <span>@Error</span>
+        <button class="btn btn-sm" @onclick="OnRetry">재시도</button>
+    </div>
+}

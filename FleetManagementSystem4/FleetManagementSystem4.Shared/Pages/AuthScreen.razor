@@ -1,0 +1,266 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Configuration
+@using Microsoft.AspNetCore.Components
+
+@code {
+    public class AuthScreenSignInArgs
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    public class AuthScreenSignUpArgs
+    {
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Department { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    [Parameter]
+    public EventCallback<AuthScreenSignInArgs> OnSignIn { get; set; }
+    
+    [Parameter]
+    public EventCallback<AuthScreenSignUpArgs> OnSignUp { get; set; }
+}
+
+<div class="min-h-screen bg-background flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- 로고 및 제목 -->
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                <span class="text-2xl text-white">🚗</span>
+            </div>
+            <h1 class="text-2xl font-bold text-foreground mb-2">법인차량 예약관리</h1>
+            <p class="text-muted-foreground">회사 차량을 효율적으로 관리하고 예약하세요</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <div class="flex items-center text-destructive">
+                    <span class="mr-2">❗</span>
+                    <span class="text-sm">@ErrorMessage</span>
+                </div>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(SuccessMessage))
+        {
+            <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div class="flex items-center text-green-700">
+                    <span class="mr-2">✅</span>
+                    <span class="text-sm">@SuccessMessage</span>
+                </div>
+            </div>
+        }
+
+        <div class="bg-white rounded-2xl shadow-lg border border-border p-6">
+            <div class="flex mb-6">
+                <button class="flex-1 py-2 px-4 text-sm font-medium rounded-lg transition-colors @(ActiveTab=="signin" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:bg-muted/80")" 
+                        @onclick="@(()=>ActiveTab = "signin")">
+                    로그인
+                </button>
+                <button class="flex-1 py-2 px-4 text-sm font-medium rounded-lg transition-colors @(ActiveTab=="signup" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:bg-muted/80")" 
+                        @onclick="@(()=>ActiveTab = "signup")">
+                    회원가입
+                </button>
+            </div>
+
+            @if (ActiveTab == "signin")
+            {
+                <EditForm Model="this" FormName="signin-form" OnValidSubmit="OnLoginClick">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="signin-email" class="block text-sm font-medium text-foreground mb-2">이메일</label>
+                            <InputText @bind-Value="SignInEmail" type="email" id="signin-email"
+                                     class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background" 
+                                     required />
+                        </div>
+                        <div>
+                            <label for="signin-password" class="block text-sm font-medium text-foreground mb-2">비밀번호</label>
+                            <InputText @bind-Value="SignInPassword" type="password" id="signin-password"
+                                     class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background" 
+                                     required />
+                        </div>
+                        <button type="submit" 
+                                class="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                                disabled="@IsLoading">
+                            @(IsLoading ? "로그인 중..." : "로그인")
+                        </button>
+                    </div>
+                </EditForm>
+                
+                <div class="mt-6 p-4 bg-muted/50 rounded-lg">
+                    <p class="text-sm font-medium text-foreground mb-2">데모 계정:</p>
+                    <div class="space-y-1 text-sm text-muted-foreground">
+                        <p><span class="font-medium">일반 사용자:</span> demo@company.com / demo123</p>
+                        <p class="text-xs ml-4">김민수 - 프로젝트 1팀</p>
+                        <p><span class="font-medium">관리자:</span> admin@company.com / admin123</p>
+                        <p class="text-xs ml-4">관리자 - 경영지원팀</p>
+                        <p><span class="font-medium">기타:</span> user@company.com / user123</p>
+                        <p class="text-xs ml-4">이영희 - 연구개발팀</p>
+                    </div>
+                </div>
+            }
+            else if (ActiveTab == "signup")
+            {
+                <EditForm Model="this" FormName="signup-editform" OnValidSubmit="OnSignUpClick">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="signup-name" class="block text-sm font-medium text-foreground mb-2">이름</label>
+                            <InputText @bind-Value="SignUpName" id="signup-name"
+                                     class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background" 
+                                     required />
+                        </div>
+                        <div>
+                            <label for="signup-department" class="block text-sm font-medium text-foreground mb-2">부서</label>
+                            <select @bind="SignUpDepartment" id="signup-department"
+                                    class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background" 
+                                    required>
+                                <option value="">부서를 선택해주세요</option>
+                                @foreach (var dept in Departments)
+                                {
+                                    <option value="@dept">@dept</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label for="signup-email" class="block text-sm font-medium text-foreground mb-2">이메일</label>
+                            <InputText @bind-Value="SignUpEmail" type="email" id="signup-email"
+                                     class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background" 
+                                     required />
+                        </div>
+                        <div>
+                            <label for="signup-password" class="block text-sm font-medium text-foreground mb-2">비밀번호</label>
+                            <InputText @bind-Value="SignUpPassword" type="password" id="signup-password"
+                                     class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background" 
+                                     required minlength="6" />
+                            <p class="text-xs text-muted-foreground mt-1">최소 6자 이상 입력해주세요</p>
+                        </div>
+                        <button type="submit" 
+                                class="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                                disabled="@IsLoading">
+                            @(IsLoading ? "가입 중..." : "회원가입")
+                        </button>
+                    </div>
+                </EditForm>
+            }
+        </div>
+        
+        <p class="text-center text-sm text-muted-foreground mt-6">
+            법인차량 예약관리 시스템 v1.0
+        </p>
+    </div>
+</div>
+
+@code {
+    private string ActiveTab { get; set; } = "signin";
+    private bool IsLoading { get; set; } = false;
+    private string? ErrorMessage { get; set; }
+    private string? SuccessMessage { get; set; }
+
+    // 로그인 폼
+    [SupplyParameterFromForm]
+    private string SignInEmail { get; set; } = "";
+    [SupplyParameterFromForm]
+    private string SignInPassword { get; set; } = "";
+
+    // 회원가입 폼
+    [SupplyParameterFromForm]
+    private string SignUpEmail { get; set; } = "";
+    [SupplyParameterFromForm]
+    private string SignUpPassword { get; set; } = "";
+    [SupplyParameterFromForm]
+    private string SignUpName { get; set; } = "";
+    [SupplyParameterFromForm]
+    private string SignUpDepartment { get; set; } = "";
+    private List<string> Departments { get; set; } = new() 
+    { 
+        "프로젝트 1팀", 
+        "프로젝트 2팀", 
+        "연구개발팀", 
+        "경영지원팀", 
+        "기술영업팀" 
+    };
+
+    [Inject]
+    private NavigationManager? NavigationManager { get; set; }
+
+    private async Task OnLoginClick()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        var args = new AuthScreenSignInArgs { Email = SignInEmail, Password = SignInPassword };
+        await OnSignIn.InvokeAsync(args);
+        IsLoading = false;
+    }
+
+    private async Task OnSignUpClick()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        SuccessMessage = null;
+
+        // 유효성 검사
+        if (string.IsNullOrWhiteSpace(SignUpName) || 
+            string.IsNullOrWhiteSpace(SignUpEmail) || 
+            string.IsNullOrWhiteSpace(SignUpDepartment) || 
+            string.IsNullOrWhiteSpace(SignUpPassword))
+        {
+            ErrorMessage = "모든 필드를 입력해주세요.";
+            IsLoading = false;
+            return;
+        }
+
+        if (SignUpPassword.Length < 6)
+        {
+            ErrorMessage = "비밀번호는 6자 이상이어야 합니다.";
+            IsLoading = false;
+            return;
+        }
+
+        try
+        {
+            var args = new AuthScreenSignUpArgs 
+            { 
+                Name = SignUpName,
+                Email = SignUpEmail, 
+                Department = SignUpDepartment,
+                Password = SignUpPassword 
+            };
+            
+            await OnSignUp.InvokeAsync(args);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"회원가입 중 오류가 발생했습니다: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    public void ShowSignUpSuccess()
+    {
+        SuccessMessage = "회원가입이 완료되었습니다. 로그인해주세요.";
+        ActiveTab = "signin";
+        ClearSignUpForm();
+        StateHasChanged();
+    }
+
+    public void ShowSignUpError(string message)
+    {
+        ErrorMessage = message;
+        StateHasChanged();
+    }
+
+    private void ClearSignUpForm()
+    {
+        SignUpEmail = "";
+        SignUpPassword = "";
+        SignUpName = "";
+        SignUpDepartment = "";
+    }
+}

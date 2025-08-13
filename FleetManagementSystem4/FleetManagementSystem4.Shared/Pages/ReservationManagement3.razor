@@ -1,0 +1,984 @@
+@page "/reservation-management"
+@using FleetManagementSystem4.Shared.Models
+@using FleetManagementSystem4.Shared.Services
+@inject IJSRuntime JSRuntime
+@inject SupabaseService SupabaseService
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- 헤더 -->
+    <div class="mb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl font-bold text-gray-900">예약 관리</h1>
+            <button @onclick="OpenCreateModal" 
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium flex items-center">
+                <span class="mr-2">+</span>
+                새 예약
+            </button>
+        </div>
+        <p class="mt-2 text-sm text-gray-600">
+            모든 차량 예약을 관리하고 승인 처리를 수행하세요.
+        </p>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <!-- 총 예약 -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <span class="text-white text-sm">📊</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">총 예약</dt>
+                            <dd class="text-lg font-medium text-gray-900">@reservations.Count()</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 대기 중 -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <span class="text-white text-sm">⏰</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">예약 중</dt>
+                            <dd class="text-lg font-medium text-gray-900">@reservations.Count(r => r.GetCurrentStatus() == "reserved")</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 사용 중 -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                            <span class="text-white text-sm">🚗</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">사용 중</dt>
+                            <dd class="text-lg font-medium text-gray-900">@reservations.Count(r => r.GetCurrentStatus() == "in_use")</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 완료됨 -->
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                            <span class="text-white text-sm">🏁</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">완료됨</dt>
+                            <dd class="text-lg font-medium text-gray-900">@reservations.Count(r => r.GetCurrentStatus() == "completed")</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 필터 및 검색 -->
+    <div class="bg-white shadow rounded-lg mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">필터 및 검색</h3>
+            <p class="mt-1 text-sm text-gray-500">예약 목록을 필터링하고 검색하세요</p>
+        </div>
+        <div class="px-6 py-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- 검색 -->
+                <div class="md:col-span-2">
+                    <label for="search" class="block text-sm font-medium text-gray-700">검색</label>
+                    <div class="mt-1 relative rounded-md shadow-sm">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span class="text-gray-400 sm:text-sm">🔍</span>
+                        </div>
+                        <input type="text" 
+                               @bind="searchTerm" 
+                               @bind:after="FilterReservations"
+                               class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
+                               placeholder="예약자명, 차량명, 부서명으로 검색..." />
+                    </div>
+                </div>
+
+                <!-- 상태 필터 -->
+                <div>
+                    <label for="status" class="block text-sm font-medium text-gray-700">상태</label>
+                    <select @bind="statusFilter" 
+                            @bind:after="FilterReservations"
+                            class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">전체 상태</option>
+                        <option value="reserved">예약 중</option>
+                        <option value="in_use">사용 중</option>
+                        <option value="completed">완료됨</option>
+                        <option value="cancelled">취소됨</option>
+                    </select>
+                </div>
+
+                <!-- 날짜 필터 -->
+                <div>
+                    <label for="date" class="block text-sm font-medium text-gray-700">기간</label>
+                    <select @bind="dateFilter" 
+                            @bind:after="FilterReservations"
+                            class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">전체 기간</option>
+                        <option value="today">오늘</option>
+                        <option value="week">이번 주</option>
+                        <option value="month">이번 달</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 예약 목록 -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">예약 목록</h3>
+                <span class="text-sm text-gray-500">총 @filteredReservations.Count()개</span>
+            </div>
+        </div>
+        <div class="divide-y divide-gray-200">
+            @if (filteredReservations.Any())
+            {
+                @foreach (var reservation in filteredReservations)
+                {
+                    <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <span class="text-blue-600 text-xl">🚗</span>
+                                </div>
+                                <div>
+                                    <div class="flex items-center space-x-3">
+                                        <h4 class="text-sm font-medium text-gray-900">@reservation.VehicleName</h4>
+                                        <span class="@reservation.GetStatusClass() px-2 py-1 rounded-full text-xs font-medium">
+                                            @reservation.GetStatusText()
+                                        </span>
+                                    </div>
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        @reservation.UserName (@reservation.Department)
+                                    </div>
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        @reservation.StartDate @reservation.StartTime ~ @reservation.EndDate @reservation.EndTime
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(reservation.Purpose))
+                                    {
+                                        <div class="mt-1 text-sm text-gray-600">
+                                            목적: @reservation.Purpose
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <button @onclick="() => ViewDetails(reservation)" 
+                                        class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    상세보기
+                                </button>
+                                @{
+                                    var currentStatus = reservation.GetCurrentStatus();
+                                    System.Console.WriteLine($"예약 {reservation.UserName} - 현재 상태: {currentStatus}, 권한: {CanCancelReservation(reservation)}");
+                                }
+                                @if ((currentStatus == "reserved" || currentStatus == "in_use") && CanCancelReservation(reservation))
+                                {
+                                    <button @onclick="() => OpenCancelDialog(reservation.Id)" 
+                                            class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
+                                        취소
+                                    </button>
+                                }
+                                @if (currentStatus == "in_use" && CanCompleteReservation(reservation))
+                                {
+                                    <button @onclick="() => OpenCompleteDialog(reservation.Id)" 
+                                            class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm">
+                                        완료처리
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="px-6 py-8 text-center">
+                    <span class="text-4xl">📋</span>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">예약이 없습니다</h3>
+                    <p class="mt-1 text-sm text-gray-500">
+                        @if (!string.IsNullOrEmpty(searchTerm) || !string.IsNullOrEmpty(statusFilter) || !string.IsNullOrEmpty(dateFilter))
+                        {
+                            <span>검색 조건과 일치하는 예약이 없습니다.</span>
+                        }
+                        else
+                        {
+                            <span>등록된 예약이 없습니다.</span>
+                        }
+                    </p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- 예약 상세 모달 -->
+    @if (showDetailModal && selectedReservation != null)
+    {
+        <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+                <div class="mt-3">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">예약 상세 정보</h3>
+                        <button @onclick="CloseDetailModal" class="text-gray-400 hover:text-gray-600">
+                            <span class="text-2xl">&times;</span>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">예약자</label>
+                                <p class="mt-1 text-sm text-gray-900">@selectedReservation.UserName</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">부서</label>
+                                <p class="mt-1 text-sm text-gray-900">@selectedReservation.Department</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">차량</label>
+                                <p class="mt-1 text-sm text-gray-900">@selectedReservation.VehicleName</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">상태</label>
+                                <span class="@selectedReservation.GetStatusClass() px-2 py-1 rounded-full text-xs font-medium">
+                                    @selectedReservation.GetStatusText()
+                                </span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">사용 기간</label>
+                            <p class="mt-1 text-sm text-gray-900">
+                                @selectedReservation.StartDate @selectedReservation.StartTime ~ @selectedReservation.EndDate @selectedReservation.EndTime
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">사용 목적</label>
+                            <p class="mt-1 text-sm text-gray-900">@selectedReservation.Purpose</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        @{
+                            var modalCurrentStatus = selectedReservation.GetCurrentStatus();
+                        }
+                        @if ((modalCurrentStatus == "reserved" || modalCurrentStatus == "in_use") && CanCancelReservation(selectedReservation))
+                        {
+                            <button @onclick="() => { OpenCancelDialog(selectedReservation.Id); CloseDetailModal(); }" 
+                                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm">
+                                취소
+                            </button>
+                        }
+                        @if (modalCurrentStatus == "in_use" && CanCompleteReservation(selectedReservation))
+                        {
+                            <button @onclick="() => { OpenCompleteDialog(selectedReservation.Id); CloseDetailModal(); }" 
+                                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm">
+                                완료처리
+                            </button>
+                        }
+                        <button @onclick="CloseDetailModal" 
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded text-sm">
+                            닫기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- 예약 생성 모달 -->
+    @if (showCreateModal)
+    {
+        <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                <div class="mt-3">
+                    <!-- 모달 헤더 -->
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-bold text-gray-900">새 예약 생성</h3>
+                        <button @onclick="CloseCreateModal" class="text-gray-400 hover:text-gray-600">
+                            <span class="sr-only">Close</span>
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- 예약 정보 입력 폼 -->
+                    <div class="space-y-6">
+                        <!-- 차량 선택 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">차량 선택 *</label>
+                            <select @bind="newVehicleId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">차량을 선택하세요</option>
+                                @foreach (var vehicle in vehicles)
+                                {
+                                    <option value="@vehicle.Id">@vehicle.Name - @vehicle.LicensePlate (@vehicle.Type)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <!-- 사용자 이름 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">사용자 이름 *</label>
+                            <input type="text" @bind="newUserName" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                   placeholder="예약자 이름을 입력하세요" />
+                        </div>
+
+                        <!-- 사용 목적 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">사용 목적</label>
+                            <textarea @bind="newPurpose" 
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      rows="3" 
+                                      placeholder="사용 목적을 입력하세요"></textarea>
+                        </div>
+
+                        <!-- 시작 날짜 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">시작 날짜 *</label>
+                            <input type="datetime-local" value="@newStartDate" @onchange="@((ChangeEventArgs e) => newStartDate = e.Value?.ToString() ?? "")"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+
+                        <!-- 종료 날짜 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">종료 날짜 *</label>
+                            <input type="datetime-local" value="@newEndDate" @onchange="@((ChangeEventArgs e) => newEndDate = e.Value?.ToString() ?? "")"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                    </div>
+
+                    <!-- 모달 푸터 -->
+                    <div class="flex justify-end space-x-3 mt-8">
+                        <button @onclick="CloseCreateModal" 
+                                class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded text-sm">
+                            취소
+                        </button>
+                        <button @onclick="CreateReservation" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">
+                            예약 생성
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- 커스텀 알림 모달 -->
+@if (showAlertModal)
+{
+    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @onclick="CloseAlertModal">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" @onclick:stopPropagation="true">
+            <div class="mt-3 text-center">
+                <!-- 아이콘 -->
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4
+                    @(alertType == "success" ? "bg-green-100" : 
+                      alertType == "error" ? "bg-red-100" : 
+                      alertType == "warning" ? "bg-yellow-100" : "bg-blue-100")">
+                    <span class="text-2xl">
+                        @(alertType == "success" ? "✅" : 
+                          alertType == "error" ? "❌" : 
+                          alertType == "warning" ? "⚠️" : "ℹ️")
+                    </span>
+                </div>
+                
+                <!-- 제목 -->
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    @(alertType == "success" ? "성공" : 
+                      alertType == "error" ? "오류" : 
+                      alertType == "warning" ? "경고" : "알림")
+                </h3>
+                
+                <!-- 메시지 -->
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500">@alertMessage</p>
+                </div>
+                
+                <!-- 버튼 -->
+                <div class="items-center px-4 py-3">
+                    <button @onclick="CloseAlertModal" 
+                            class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        확인
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 예약 취소 확인 모달 -->
+@if (showCancelDialog && reservationToCancel != null)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                        <span class="text-2xl text-red-600">⚠️</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-900">예약 취소</h2>
+                        <p class="text-sm text-gray-500">이 작업은 되돌릴 수 없습니다.</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">예약자:</span>
+                            <span class="text-sm font-medium text-gray-900">@reservationToCancel.UserName</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">차량명:</span>
+                            <span class="text-sm font-medium text-gray-900">@reservationToCancel.VehicleName</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">예약 기간:</span>
+                            <span class="text-sm font-medium text-gray-900">
+                                @(DateTime.TryParse(reservationToCancel.StartDate, out var start) ? start.ToString("MM/dd HH:mm") : reservationToCancel.StartDate) 
+                                ~ 
+                                @(DateTime.TryParse(reservationToCancel.EndDate, out var end) ? end.ToString("MM/dd HH:mm") : reservationToCancel.EndDate)
+                            </span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(reservationToCancel.Purpose))
+                        {
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-600">목적:</span>
+                                <span class="text-sm font-medium text-gray-900">@reservationToCancel.Purpose</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+                
+                <p class="text-gray-700 mb-6">
+                    정말로 '<strong>@reservationToCancel.UserName</strong>'님의 '<strong>@reservationToCancel.VehicleName</strong>' 예약을 취소하시겠습니까?
+                </p>
+                
+                <div class="flex justify-end space-x-2">
+                    <button @onclick="() => { showCancelDialog = false; reservationToCancel = null; }"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition-colors font-medium">
+                        취소
+                    </button>
+                    <button @onclick="HandleCancelReservation" disabled="@isSubmitting"
+                            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50">
+                        @if (isSubmitting)
+                        {
+                            <span>취소 중...</span>
+                        }
+                        else
+                        {
+                            <span>예약 취소</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* 예약 완료 확인 모달 *@
+@if (showCompleteDialog && reservationToComplete != null)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">예약 완료 처리 확인</h3>
+                
+                <!-- 예약 정보 표시 -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700">예약자:</span>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                <span class="text-white text-sm font-medium">@reservationToComplete.UserName.Substring(0, 1)</span>
+                            </div>
+                            <span class="text-sm font-medium text-gray-900">@reservationToComplete.UserName</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700">차량:</span>
+                        <span class="text-sm font-medium text-gray-900">@reservationToComplete.VehicleName</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700">사용 기간:</span>
+                        <span class="text-sm text-gray-600">
+                            @(DateTime.TryParse(reservationToComplete.StartDate, out var start) ? start.ToString("MM/dd HH:mm") : reservationToComplete.StartDate) 
+                            ~ 
+                            @(DateTime.TryParse(reservationToComplete.EndDate, out var end) ? end.ToString("MM/dd HH:mm") : reservationToComplete.EndDate)
+                        </span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(reservationToComplete.Purpose))
+                    {
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium text-gray-700">목적:</span>
+                            <span class="text-sm font-medium text-gray-900">@reservationToComplete.Purpose</span>
+                        </div>
+                    }
+                </div>
+                
+                <div class="text-center text-gray-700">
+                    정말로 '<strong>@reservationToComplete.UserName</strong>'님의 '<strong>@reservationToComplete.VehicleName</strong>' 예약을 완료 처리하시겠습니까?
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button @onclick="() => { showCompleteDialog = false; reservationToComplete = null; }"
+                        class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors font-medium">
+                    취소
+                </button>
+                <button @onclick="HandleCompleteReservation" disabled="@isSubmitting"
+                        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50">
+                    @if (isSubmitting)
+                    {
+                        <span>완료 처리 중...</span>
+                    }
+                    else
+                    {
+                        <span>완료 처리</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<Reservation> Reservations { get; set; } = new();
+    [Parameter] public List<Vehicle> Vehicles { get; set; } = new();
+    [Parameter] public User? CurrentUser { get; set; }
+    [Parameter] public EventCallback<string> OnReservationCancelled { get; set; }
+    [Parameter] public EventCallback<string> OnReservationCompleted { get; set; }
+    
+    private List<Reservation> reservations = new();
+    private List<Reservation> filteredReservations = new();
+    private List<Vehicle> vehicles = new();
+    private string searchTerm = "";
+    private string statusFilter = "";
+    private string vehicleFilter = "";
+    private string dateFilter = "";
+    
+    // 커스텀 알림 모달 관련 변수
+    private bool showAlertModal = false;
+    private string alertMessage = "";
+    private string alertType = "info"; // success, error, warning, info
+    private bool showDetailModal = false;
+    private Reservation? selectedReservation = null;
+    
+    // 예약 취소 확인 모달 관련 변수
+    private bool showCancelDialog = false;
+    private Reservation? reservationToCancel = null;
+    
+    // 예약 완료 확인 모달 관련 변수
+    private bool showCompleteDialog = false;
+    private Reservation? reservationToComplete = null;
+    
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataFromSupabase();
+        FilterReservations();
+    }
+
+    protected override void OnParametersSet()
+    {
+        reservations = Reservations ?? new List<Reservation>();
+        FilterReservations();
+    }
+
+    private async Task ShowAlert(string message, string type = "info")
+    {
+        alertMessage = message;
+        alertType = type;
+        showAlertModal = true;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+    
+    private void CloseAlertModal()
+    {
+        showAlertModal = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadDataFromSupabase()
+    {
+        try
+        {
+            // Supabase에서 최신 예약 데이터 로드
+            reservations = await SupabaseService.GetReservationsAsync();
+            vehicles = await SupabaseService.GetVehiclesAsync();
+            Console.WriteLine($"예약 관리에서 {reservations.Count}개 예약, {vehicles.Count}개 차량 로드됨");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"데이터 로드 오류: {ex.Message}");
+            // 파라미터로 받은 데이터 사용
+            reservations = Reservations ?? new List<Reservation>();
+            vehicles = Vehicles ?? new List<Vehicle>();
+        }
+    }
+
+    private void FilterReservations()
+    {
+        filteredReservations = reservations.Where(r =>
+        {
+            var matchesSearch = string.IsNullOrEmpty(searchTerm) ||
+                              r.UserName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                              r.VehicleName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                              r.Department.Contains(searchTerm, StringComparison.OrdinalIgnoreCase);
+
+            var matchesStatus = string.IsNullOrEmpty(statusFilter) || r.GetCurrentStatus() == statusFilter;
+
+            var matchesVehicle = string.IsNullOrEmpty(vehicleFilter) || r.VehicleId == vehicleFilter;
+
+            var matchesDate = true;
+            if (!string.IsNullOrEmpty(dateFilter))
+            {
+                if (DateTime.TryParse(r.StartDate, out var reservationDate) && DateTime.TryParse(dateFilter, out var filterDate))
+                {
+                    matchesDate = reservationDate.Date == filterDate.Date;
+                }
+            }
+
+            return matchesSearch && matchesStatus && matchesVehicle && matchesDate;
+        }).ToList();
+
+        StateHasChanged();
+    }
+
+    private void ViewDetails(Reservation reservation)
+    {
+        selectedReservation = reservation;
+        showDetailModal = true;
+    }
+
+    private void CloseDetailModal()
+    {
+        showDetailModal = false;
+        selectedReservation = null;
+    }
+
+    // 권한 체크 메서드들
+    private bool CanCancelReservation(Reservation reservation)
+    {
+        System.Console.WriteLine($"=== 취소 권한 체크 ===");
+        System.Console.WriteLine($"CurrentUser: {CurrentUser?.Name ?? "null"}");
+        System.Console.WriteLine($"CurrentUser Role: {CurrentUser?.Role ?? "null"}");
+        System.Console.WriteLine($"예약자: {reservation.UserName}");
+        System.Console.WriteLine($"예약 UserId: {reservation.UserId}");
+        
+        if (CurrentUser == null) 
+        {
+            System.Console.WriteLine("CurrentUser가 null이므로 권한 없음");
+            return false;
+        }
+        
+        // 관리자는 모든 예약 취소 가능
+        if (CurrentUser.Role == "Admin") 
+        {
+            System.Console.WriteLine("관리자 권한으로 취소 가능");
+            return true;
+        }
+        
+        // 본인 예약만 취소 가능
+        bool canCancel = reservation.UserId == CurrentUser.Id || reservation.UserName == CurrentUser.Name;
+        System.Console.WriteLine($"본인 예약 확인 결과: {canCancel}");
+        
+        return canCancel;
+    }
+
+    private bool CanCompleteReservation(Reservation reservation)
+    {
+        if (CurrentUser == null) return false;
+        
+        // 관리자는 모든 예약 완료 처리 가능
+        if (CurrentUser.Role == "Admin") return true;
+        
+        // 본인 예약만 완료 처리 가능
+        return reservation.UserId == CurrentUser.Id || reservation.UserName == CurrentUser.Name;
+    }
+
+    private void OpenCompleteDialog(string reservationId)
+    {
+        var reservation = reservations.FirstOrDefault(r => r.Id == reservationId);
+        if (reservation == null)
+        {
+            ShowAlert("예약을 찾을 수 없습니다.", "error");
+            return;
+        }
+
+        if (!CanCompleteReservation(reservation))
+        {
+            ShowAlert("본인의 예약만 완료 처리할 수 있습니다.", "warning");
+            return;
+        }
+
+        reservationToComplete = reservation;
+        showCompleteDialog = true;
+        StateHasChanged();
+    }
+
+    private void OpenCancelDialog(string reservationId)
+    {
+        var reservation = reservations.FirstOrDefault(r => r.Id == reservationId);
+        if (reservation == null)
+        {
+            ShowAlert("예약을 찾을 수 없습니다.", "error");
+            return;
+        }
+
+        if (!CanCancelReservation(reservation))
+        {
+            ShowAlert("본인의 예약만 취소할 수 있습니다.", "warning");
+            return;
+        }
+
+        reservationToCancel = reservation;
+        showCancelDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleCancelReservation()
+    {
+        if (reservationToCancel == null) return;
+
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // MainApp의 핸들러 호출 (Supabase에서 삭제)
+            await OnReservationCancelled.InvokeAsync(reservationToCancel.Id);
+            
+            // 로컬 데이터에서도 제거
+            reservations.RemoveAll(r => r.Id == reservationToCancel.Id);
+            FilterReservations();
+            
+            // 모달 닫기
+            showCancelDialog = false;
+            reservationToCancel = null;
+            
+            await ShowAlert("예약이 취소되었습니다.", "success");
+        }
+        catch (Exception ex)
+        {
+            await ShowAlert($"예약 취소 중 오류가 발생했습니다: {ex.Message}", "error");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async void CancelReservation(string reservationId)
+    {
+        OpenCancelDialog(reservationId);
+    }
+
+    private async Task HandleCompleteReservation()
+    {
+        if (reservationToComplete == null) return;
+
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // MainApp의 핸들러 호출 (Supabase에 완료 상태 업데이트)
+            await OnReservationCompleted.InvokeAsync(reservationToComplete.Id);
+            
+            // 모달 닫기
+            showCompleteDialog = false;
+            reservationToComplete = null;
+            
+            await ShowAlert("예약이 완료 처리되었습니다.", "success");
+        }
+        catch (Exception ex)
+        {
+            await ShowAlert($"예약 완료 처리 중 오류가 발생했습니다: {ex.Message}", "error");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async void CompleteReservation(string reservationId)
+    {
+        OpenCompleteDialog(reservationId);
+    }
+
+    private async Task DeleteReservation(string reservationId)
+    {
+        var reservation = reservations.FirstOrDefault(r => r.Id == reservationId);
+        if (reservation == null)
+        {
+            await ShowAlert("예약을 찾을 수 없습니다.", "error");
+            return;
+        }
+
+        // 확인 창 표시
+        var confirmMessage = $"'{reservation.UserName}'님의 '{reservation.VehicleName}' 예약을 완전히 삭제하시겠습니까?\\n\\n⚠️ 이 작업은 되돌릴 수 없습니다.\\n\\n예약 기간: {reservation.StartDate:MM/dd} ~ {reservation.EndDate:MM/dd}\\n목적: {reservation.Purpose}";
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", confirmMessage);
+        
+        if (!confirmed)
+        {
+            Console.WriteLine("사용자가 예약 삭제를 취소함");
+            return;
+        }
+
+        try
+        {
+            // Supabase에서 예약 삭제
+            var success = await SupabaseService.DeleteReservationAsync(reservationId);
+            
+            if (success)
+            {
+                Console.WriteLine($"예약이 Supabase에서 삭제됨: {reservationId}");
+                reservations.RemoveAll(r => r.Id == reservationId);
+            }
+            else
+            {
+                Console.WriteLine("Supabase 삭제 실패, 로컬에서만 삭제됨");
+                reservations.RemoveAll(r => r.Id == reservationId);
+            }
+            
+            FilterReservations();
+            CloseDetailModal();
+            await ShowAlert("예약이 삭제되었습니다.", "success");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"예약 삭제 오류: {ex.Message}");
+            // 오류 시에도 로컬에서는 삭제
+            reservations.RemoveAll(r => r.Id == reservationId);
+            FilterReservations();
+            CloseDetailModal();
+            await ShowAlert($"예약 삭제 중 오류가 발생했습니다: {ex.Message}", "error");
+        }
+    }
+
+    // 예약 생성 모달 관련 메서드
+    private bool showCreateModal = false;
+    private string newStartDate = DateTime.Today.ToString("yyyy-MM-ddTHH:mm");
+    private string newEndDate = DateTime.Today.AddDays(1).ToString("yyyy-MM-ddTHH:mm");
+    private string newVehicleId = "";
+    private string newUserName = "";
+    private string newPurpose = "";
+
+    private void OpenCreateModal()
+    {
+        newStartDate = DateTime.Today.ToString("yyyy-MM-ddTHH:mm");
+        newEndDate = DateTime.Today.AddDays(1).ToString("yyyy-MM-ddTHH:mm");
+        newVehicleId = "";
+        newUserName = "";
+        newPurpose = "";
+        showCreateModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseCreateModal()
+    {
+        showCreateModal = false;
+        StateHasChanged();
+    }
+
+    private async Task CreateReservation()
+    {
+        try
+        {
+            // 검증
+            if (string.IsNullOrEmpty(newVehicleId))
+            {
+                await ShowAlert("차량을 선택해주세요.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(newUserName?.Trim()))
+            {
+                await ShowAlert("사용자 이름을 입력해주세요.");
+                return;
+            }
+
+            if (DateTime.TryParse(newStartDate, out var startDateTime) && startDateTime < DateTime.Today)
+            {
+                await ShowAlert("시작 날짜는 오늘 이후여야 합니다.");
+                return;
+            }
+
+            if (DateTime.TryParse(newStartDate, out var start) && DateTime.TryParse(newEndDate, out var end) && end <= start)
+            {
+                await ShowAlert("종료 날짜는 시작 날짜보다 나중이어야 합니다.");
+                return;
+            }
+
+            // 새 예약 생성
+            var newReservation = new Reservation
+            {
+                Id = Guid.NewGuid().ToString(),
+                VehicleId = newVehicleId,
+                StartDate = newStartDate,
+                EndDate = newEndDate,
+                UserName = newUserName,
+                Purpose = newPurpose,
+                Status = "confirmed",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            // Supabase에 저장
+            var success = await SupabaseService.AddReservationAsync(newReservation);
+            
+            if (success)
+            {
+                Console.WriteLine($"예약이 Supabase에 저장됨: {newReservation.Id}");
+                
+                // 로컬 데이터에도 추가
+                reservations.Add(newReservation);
+                
+                FilterReservations();
+                CloseCreateModal();
+                await ShowAlert("예약이 성공적으로 생성되었습니다!");
+            }
+            else
+            {
+                await ShowAlert("예약 생성에 실패했습니다. 다시 시도해주세요.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"예약 생성 오류: {ex.Message}");
+            await ShowAlert($"예약 생성 중 오류가 발생했습니다: {ex.Message}");
+        }
+    }
+
+}

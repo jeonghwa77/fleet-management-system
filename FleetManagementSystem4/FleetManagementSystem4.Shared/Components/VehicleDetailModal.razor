@@ -1,0 +1,289 @@
+@using FleetManagementSystem4.Shared.Models
+
+@code {
+    [Parameter] public Vehicle? Vehicle { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Vehicle> OnSave { get; set; }
+    [Parameter] public EventCallback<string> OnDelete { get; set; }
+
+    private bool IsEditing { get; set; } = false;
+    private bool IsLoading { get; set; } = false;
+    private Vehicle EditingVehicle { get; set; } = new();
+
+    protected override void OnParametersSet()
+    {
+        if (Vehicle != null)
+        {
+            EditingVehicle = new Vehicle
+            {
+                Id = Vehicle.Id,
+                Name = Vehicle.Name,
+                Type = Vehicle.Type,
+                LicensePlate = Vehicle.LicensePlate,
+                Fuel = Vehicle.Fuel,
+                Color = Vehicle.Color,
+                Status = Vehicle.Status,
+                Year = Vehicle.Year,
+                Mileage = Vehicle.Mileage,
+                LastMaintenance = Vehicle.LastMaintenance,
+                NextMaintenance = Vehicle.NextMaintenance,
+                InsuranceExpiry = Vehicle.InsuranceExpiry
+            };
+        }
+    }
+
+    private async Task SaveVehicle()
+    {
+        IsLoading = true;
+        await Task.Delay(500); // API 호출 시뮬레이션
+        await OnSave.InvokeAsync(EditingVehicle);
+        IsEditing = false;
+        IsLoading = false;
+    }
+
+    private async Task DeleteVehicle()
+    {
+        if (Vehicle != null && await ConfirmDelete())
+        {
+            IsLoading = true;
+            await Task.Delay(500);
+            await OnDelete.InvokeAsync(Vehicle.Id);
+            IsLoading = false;
+        }
+    }
+
+    private async Task<bool> ConfirmDelete()
+    {
+        // TODO: 실제 확인 다이얼로그 구현
+        return true;
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "사용 가능" => "bg-green-100 text-green-700",
+            "예약 중" => "bg-blue-100 text-blue-700",
+            "점검 중" => "bg-yellow-100 text-yellow-700",
+            "수리 중" => "bg-red-100 text-red-700",
+            _ => "bg-gray-100 text-gray-700"
+        };
+    }
+}
+
+@if (Vehicle != null)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <!-- 헤더 -->
+            <div class="flex items-center justify-between p-6 border-b border-border">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <span class="text-2xl">🚗</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-foreground">
+                            @(IsEditing ? "차량 정보 수정" : Vehicle.Name)
+                        </h2>
+                        <p class="text-sm text-muted-foreground">
+                            @(IsEditing ? "차량 정보를 수정하세요" : Vehicle.LicensePlate)
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    @if (!IsEditing)
+                    {
+                        <button @onclick="() => IsEditing = true" 
+                                class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                            수정
+                        </button>
+                    }
+                    <button @onclick="OnClose" 
+                            class="text-muted-foreground hover:text-foreground p-2 rounded-md transition-colors">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- 본문 -->
+            <div class="p-6">
+                @if (IsEditing)
+                {
+                    <!-- 편집 모드 -->
+                    <div class="space-y-6">
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">차량명</label>
+                                <input @bind="EditingVehicle.Name" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">번호판</label>
+                                <input @bind="EditingVehicle.LicensePlate" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">차종</label>
+                                <select @bind="EditingVehicle.Type" 
+                                        class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring">
+                                    <option value="승용차">승용차</option>
+                                    <option value="SUV">SUV</option>
+                                    <option value="승합차">승합차</option>
+                                    <option value="트럭">트럭</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">연료</label>
+                                <select @bind="EditingVehicle.Fuel" 
+                                        class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring">
+                                    <option value="휘발유">휘발유</option>
+                                    <option value="경유">경유</option>
+                                    <option value="LPG">LPG</option>
+                                    <option value="전기">전기</option>
+                                    <option value="하이브리드">하이브리드</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">색상</label>
+                                <input @bind="EditingVehicle.Color" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">상태</label>
+                                <select @bind="EditingVehicle.Status" 
+                                        class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring">
+                                    <option value="사용 가능">사용 가능</option>
+                                    <option value="예약 중">예약 중</option>
+                                    <option value="점검 중">점검 중</option>
+                                    <option value="수리 중">수리 중</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">연식</label>
+                                <input @bind="EditingVehicle.Year" type="number" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">주행거리 (km)</label>
+                                <input @bind="EditingVehicle.Mileage" type="number" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                        </div>
+                        
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">최근 정비일</label>
+                                <input @bind="EditingVehicle.LastMaintenance" type="date" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">다음 정비일</label>
+                                <input @bind="EditingVehicle.NextMaintenance" type="date" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">보험 만료일</label>
+                                <input @bind="EditingVehicle.InsuranceExpiry" type="date" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <!-- 보기 모드 -->
+                    <div class="space-y-6">
+                        <!-- 기본 정보 -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                <span class="mr-2">🔧</span>
+                                기본 정보
+                            </h3>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">차종:</span>
+                                    <span class="font-medium text-foreground">@Vehicle.Type</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">연료:</span>
+                                    <span class="font-medium text-foreground">@Vehicle.Fuel</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">색상:</span>
+                                    <span class="font-medium text-foreground">@Vehicle.Color</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">상태:</span>
+                                    <span class="@GetStatusClass(Vehicle.Status) px-2 py-1 rounded-full text-xs font-medium">
+                                        @Vehicle.Status
+                                    </span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">연식:</span>
+                                    <span class="font-medium text-foreground">@Vehicle.Year 년</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">주행거리:</span>
+                                    <span class="font-medium text-foreground">@Vehicle.Mileage.ToString("N0") km</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 정비 정보 -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                <span class="mr-2">🛠️</span>
+                                정비 정보
+                            </h3>
+                            <div class="grid gap-4 md:grid-cols-3">
+                                <div class="bg-muted/50 p-4 rounded-lg">
+                                    <div class="text-sm text-muted-foreground">최근 정비일</div>
+                                    <div class="font-medium text-foreground">@Vehicle.LastMaintenance?.ToString("yyyy-MM-dd")</div>
+                                </div>
+                                <div class="bg-muted/50 p-4 rounded-lg">
+                                    <div class="text-sm text-muted-foreground">다음 정비일</div>
+                                    <div class="font-medium text-foreground">@Vehicle.NextMaintenance?.ToString("yyyy-MM-dd")</div>
+                                </div>
+                                <div class="bg-muted/50 p-4 rounded-lg">
+                                    <div class="text-sm text-muted-foreground">보험 만료일</div>
+                                    <div class="font-medium text-foreground">@Vehicle.InsuranceExpiry?.ToString("yyyy-MM-dd")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- 푸터 -->
+            <div class="flex items-center justify-between p-6 border-t border-border">
+                @if (IsEditing)
+                {
+                    <button @onclick="DeleteVehicle" 
+                            class="border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground px-4 py-2 rounded-lg transition-colors font-medium"
+                            disabled="@IsLoading">
+                        삭제
+                    </button>
+                    <div class="flex space-x-2">
+                        <button @onclick="() => IsEditing = false" 
+                                class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                            취소
+                        </button>
+                        <button @onclick="SaveVehicle" 
+                                class="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors font-medium"
+                                disabled="@IsLoading">
+                            @(IsLoading ? "저장 중..." : "저장")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div></div>
+                    <button @onclick="OnClose" 
+                            class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                        닫기
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}

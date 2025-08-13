@@ -1,0 +1,97 @@
+@* PWA 스타일 상단 헤더 *@
+@code {
+    [Parameter] public string? UserName { get; set; }
+    [Parameter] public string? Department { get; set; }
+    [Parameter] public bool IsMobile { get; set; }
+    [Parameter] public string ActiveTab { get; set; } = "dashboard";
+    [Parameter] public EventCallback OnSignOut { get; set; }
+    [Parameter] public string ConnectionStatus { get; set; } = "online";
+    [Parameter] public bool IsUsingMockData { get; set; }
+    [Parameter] public int ActiveReservations { get; set; }
+
+    private string GetConnectionStatusClass()
+    {
+        return ConnectionStatus switch
+        {
+            "online" => "bg-green-100 text-green-700",
+            "offline" => "bg-red-100 text-red-700",
+            _ => "bg-yellow-100 text-yellow-700"
+        };
+    }
+
+    private string GetConnectionStatusText()
+    {
+        return ConnectionStatus switch
+        {
+            "online" => "온라인",
+            "offline" => "오프라인",
+            _ => "연결 중"
+        };
+    }
+}
+
+<header class="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-14 md:h-16">
+            <!-- 로고 및 제목 -->
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center justify-center w-10 h-10 bg-primary rounded-xl shadow-sm">
+                    <span class="text-xl">🚗</span>
+                </div>
+                <div class="hidden md:block">
+                    <h1 class="text-xl font-bold text-foreground">법인차량 예약관리</h1>
+                    <p class="text-sm text-muted-foreground">효율적인 차량 관리 시스템</p>
+                </div>
+                <div class="md:hidden">
+                    <h1 class="text-lg font-semibold text-foreground capitalize">@ActiveTab</h1>
+                </div>
+            </div>
+
+            <!-- 우측 메뉴 -->
+            <div class="flex items-center space-x-3">
+                @if (!IsMobile)
+                {
+                    <!-- 사용자 정보 -->
+                    <div class="hidden sm:flex items-center space-x-3">
+                        <div class="text-right">
+                            <p class="text-sm font-medium text-foreground">@UserName</p>
+                            <p class="text-xs text-muted-foreground">@Department</p>
+                        </div>
+                        <div class="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                            <span class="text-sm font-medium text-primary">@(UserName?.Substring(0, 1) ?? "U")</span>
+                        </div>
+                    </div>
+
+                    <!-- 연결 상태 -->
+                    <div class="@GetConnectionStatusClass() px-2 py-1 rounded-full text-xs font-medium">
+                        <span class="w-2 h-2 bg-current rounded-full inline-block mr-1"></span>
+                        @GetConnectionStatusText()
+                    </div>
+
+                    @if (IsUsingMockData)
+                    {
+                        <div class="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-medium">
+                            <span class="mr-1">⚠️</span>
+                            Demo 모드
+                        </div>
+                    }
+                }
+
+                <!-- 모바일 활성 예약 수 -->
+                @if (ActiveReservations > 0 && IsMobile)
+                {
+                    <div class="bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
+                        @ActiveReservations
+                    </div>
+                }
+
+                <!-- 로그아웃 버튼 -->
+                <button @onclick="OnSignOut" 
+                        class="w-9 h-9 bg-muted hover:bg-muted/80 rounded-lg flex items-center justify-center transition-colors" 
+                        title="로그아웃">
+                    <span class="text-lg">↗</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</header>

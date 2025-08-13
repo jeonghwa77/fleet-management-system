@@ -1,0 +1,51 @@
+@* PWA 스타일 모바일 하단 네비게이션 *@
+@code {
+    [Parameter] public string ActiveTab { get; set; } = "dashboard";
+    [Parameter] public EventCallback<string> OnTabChange { get; set; }
+    [Parameter] public int PendingCount { get; set; }
+
+    private string GetTabClass(string tab)
+    {
+        var baseClass = "flex-1 flex flex-col items-center py-2 px-1 transition-colors";
+        return ActiveTab == tab 
+            ? $"{baseClass} text-primary bg-primary/5" 
+            : $"{baseClass} text-muted-foreground hover:text-foreground";
+    }
+
+    private record NavItem(string Id, string Icon, string Label);
+    
+    private readonly NavItem[] NavItems = new[]
+    {
+        new NavItem("dashboard", "🏠", "대시보드"),
+        new NavItem("vehicles", "🚗", "차량"),
+        new NavItem("reservation", "📝", "예약"),
+        new NavItem("management", "📋", "관리")
+    };
+}
+
+<nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-50 safe-area-bottom">
+    <div class="flex">
+        @foreach (var item in NavItems)
+        {
+            <button @onclick="() => OnTabChange.InvokeAsync(item.Id)" 
+                    class="@GetTabClass(item.Id)">
+                <div class="relative">
+                    <span class="text-xl mb-1">@item.Icon</span>
+                    @if (item.Id == "management" && PendingCount > 0)
+                    {
+                        <div class="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs font-bold">
+                            @(PendingCount > 99 ? "99+" : PendingCount.ToString())
+                        </div>
+                    }
+                </div>
+                <span class="text-xs font-medium leading-tight">@item.Label</span>
+            </button>
+        }
+    </div>
+</nav>
+
+<style>
+    .safe-area-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+</style>

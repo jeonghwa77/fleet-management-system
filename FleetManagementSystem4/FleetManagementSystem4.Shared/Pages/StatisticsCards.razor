@@ -1,0 +1,31 @@
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+	<div style="background:#ede9fe;padding:16px;border-radius:12px;">
+		<div style="font-size:14px;color:#6b7280;">전체 차량</div>
+		<div style="font-size:28px;font-weight:bold;">@TotalVehicles</div>
+		<div style="font-size:12px;color:#6b7280;">사용 가능: @AvailableVehicles 대</div>
+	</div>
+	<div style="background:#fef9c3;padding:16px;border-radius:12px;">
+		<div style="font-size:14px;color:#6b7280;">총 예약</div>
+		<div style="font-size:28px;font-weight:bold;">@TotalReservations</div>
+		<div style="font-size:12px;color:#6b7280;">전체 예약 건수</div>
+	</div>
+	<div style="background:#dcfce7;padding:16px;border-radius:12px;">
+		<div style="font-size:14px;color:#6b7280;">활성 예약</div>
+		<div style="font-size:28px;font-weight:bold;">@ActiveReservations</div>
+		<div style="font-size:12px;color:#6b7280;">진행 중 예약</div>
+	</div>
+	<div style="background:#fee2e2;padding:16px;border-radius:12px;">
+		<div style="font-size:14px;color:#6b7280;">가동률</div>
+		<div style="font-size:28px;font-weight:bold;">@UtilizationRate%</div>
+		<div style="font-size:12px;color:#6b7280;">(예약 차량/전체 차량)</div>
+	</div>
+</div>
+
+@code {
+	// TODO: 실제 데이터 연동
+	private int TotalVehicles { get; set; } = 12;
+	private int AvailableVehicles { get; set; } = 8;
+	private int TotalReservations { get; set; } = 24;
+	private int ActiveReservations { get; set; } = 5;
+	private int UtilizationRate => TotalVehicles > 0 ? (int)(((TotalVehicles-AvailableVehicles)/(double)TotalVehicles)*100) : 0;
+}

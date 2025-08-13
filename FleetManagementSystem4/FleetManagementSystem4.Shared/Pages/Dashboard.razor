@@ -1,0 +1,300 @@
+@page "/dashboard"
+@using FleetManagementSystem4.Shared.Models
+
+@code {
+    [Parameter] public IEnumerable<Vehicle>? Vehicles { get; set; }
+    [Parameter] public IEnumerable<Reservation>? Reservations { get; set; }
+    [Parameter] public bool IsMobile { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+
+    private string SelectedVehicleFilter { get; set; } = "all";
+    private DateTime SelectedDate { get; set; } = DateTime.Today;
+    private DateTime CurrentMonth { get; set; } = DateTime.Today;
+
+    private IEnumerable<Reservation> FilteredReservations =>
+        Reservations?.Where(r => 
+            (SelectedVehicleFilter == "all" || r.VehicleId == SelectedVehicleFilter) &&
+            r.StartDateTime.Date <= SelectedDate && r.EndDateTime.Date >= SelectedDate
+        ) ?? Enumerable.Empty<Reservation>();
+
+    private IEnumerable<Reservation> GetReservationsForDate(DateTime date) =>
+        Reservations?.Where(r => 
+            (SelectedVehicleFilter == "all" || r.VehicleId == SelectedVehicleFilter) &&
+            r.StartDateTime.Date <= date.Date && r.EndDateTime.Date >= date.Date
+        ) ?? Enumerable.Empty<Reservation>();
+
+    private void OnVehicleFilterChange(string vehicleId)
+    {
+        SelectedVehicleFilter = vehicleId;
+    }
+
+    private void OnDateChange(DateTime date)
+    {
+        SelectedDate = date;
+    }
+
+    private void PreviousMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(-1);
+    }
+
+    private void NextMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(1);
+    }
+
+    private void SelectDate(DateTime date)
+    {
+        SelectedDate = date;
+    }
+
+    private string GetDayClass(DateTime date)
+    {
+        var reservations = GetReservationsForDate(date);
+        var baseClass = "calendar-day";
+        
+        if (date.Date == DateTime.Today.Date)
+            baseClass += " today";
+        
+        if (date.Date == SelectedDate.Date)
+            baseClass += " selected";
+            
+        if (date.Month != CurrentMonth.Month)
+            baseClass += " other-month";
+            
+        if (reservations.Any())
+            baseClass += " has-reservations";
+            
+        return baseClass;
+    }
+
+    private IEnumerable<DateTime> GetCalendarDays()
+    {
+        var firstDay = new DateTime(CurrentMonth.Year, CurrentMonth.Month, 1);
+        var lastDay = firstDay.AddMonths(1).AddDays(-1);
+        
+        // 시작을 일요일로 맞춤
+        var startDate = firstDay.AddDays(-(int)firstDay.DayOfWeek);
+        
+        // 6주치 날짜 생성
+        var days = new List<DateTime>();
+        for (int i = 0; i < 42; i++)
+        {
+            days.Add(startDate.AddDays(i));
+        }
+        
+        return days;
+    }
+}
+
+<!-- React app.tsx 스타일 대시보드 -->
+<div class="space-y-6">
+    <!-- 통계 카드 섹션 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow-sm border border-border p-4 md:p-6">
+            <div class="flex items-center">
+                <div class="@(IsMobile ? "hidden" : "flex-shrink-0")">
+                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span style="font-size:20px;">🚗</span>
+                    </div>
+                </div>
+                <div class="@(IsMobile ? "" : "ml-4")">
+                    <p class="text-sm font-medium text-muted-foreground">총 차량</p>
+                    <p class="@(IsMobile ? "text-xl" : "text-2xl") font-bold text-foreground">@(Vehicles?.Count() ?? 0)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-border p-4 md:p-6">
+            <div class="flex items-center">
+                <div class="@(IsMobile ? "hidden" : "flex-shrink-0")">
+                    <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                        <span style="font-size:20px;">📅</span>
+                    </div>
+                </div>
+                <div class="@(IsMobile ? "" : "ml-4")">
+                    <p class="text-sm font-medium text-muted-foreground">오늘 예약</p>
+                    <p class="@(IsMobile ? "text-xl" : "text-2xl") font-bold text-foreground">@(Reservations?.Count(r => r.StartDateTime.Date <= DateTime.Today && r.EndDateTime.Date >= DateTime.Today) ?? 0)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-border p-4 md:p-6">
+            <div class="flex items-center">
+                <div class="@(IsMobile ? "hidden" : "flex-shrink-0")">
+                    <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <span style="font-size:20px;">✅</span>
+                    </div>
+                </div>
+                <div class="@(IsMobile ? "" : "ml-4")">
+                    <p class="text-sm font-medium text-muted-foreground">이용 가능</p>
+                    <p class="@(IsMobile ? "text-xl" : "text-2xl") font-bold text-foreground">@(Vehicles?.Count() - (Reservations?.Count(r => r.StartDateTime.Date <= DateTime.Today && r.EndDateTime.Date >= DateTime.Today) ?? 0))</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm border border-border p-4 md:p-6">
+            <div class="flex items-center">
+                <div class="@(IsMobile ? "hidden" : "flex-shrink-0")">
+                    <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <span style="font-size:20px;">📊</span>
+                    </div>
+                </div>
+                <div class="@(IsMobile ? "" : "ml-4")">
+                    <p class="text-sm font-medium text-muted-foreground">이번 달</p>
+                    <p class="@(IsMobile ? "text-xl" : "text-2xl") font-bold text-foreground">@(Reservations?.Count(r => r.StartDateTime.Month == DateTime.Today.Month) ?? 0)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 차량 필터 -->
+    <div class="bg-white rounded-lg shadow-sm border border-border p-4">
+        <h3 class="text-lg font-semibold text-foreground mb-4">차량 필터</h3>
+        <select @bind="SelectedVehicleFilter" class="w-full md:w-64 px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring">
+            <option value="all">모든 차량</option>
+            @if (Vehicles != null)
+            {
+                @foreach (var vehicle in Vehicles)
+                {
+                    <option value="@vehicle.Id">@vehicle.Name</option>
+                }
+            }
+        </select>
+    </div>
+
+    <!-- 예약 캘린더 -->
+    <div class="bg-white rounded-lg shadow-sm border border-border">
+        <div class="flex items-center justify-between p-4 border-b border-border">
+            <h3 class="text-lg font-semibold text-foreground">예약 캘린더</h3>
+            <div class="flex items-center space-x-2">
+                <button @onclick="PreviousMonth" class="p-2 hover:bg-muted rounded-md transition-colors">
+                    <span style="font-size:16px;">‹</span>
+                </button>
+                <span class="px-4 py-2 text-sm font-medium text-foreground min-w-[120px] text-center">
+                    @CurrentMonth.ToString("yyyy년 MM월")
+                </span>
+                <button @onclick="NextMonth" class="p-2 hover:bg-muted rounded-md transition-colors">
+                    <span style="font-size:16px;">›</span>
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-4">
+            <!-- 캘린더 헤더 -->
+            <div class="grid grid-cols-7 gap-1 mb-2">
+                <div class="p-2 text-center text-sm font-medium text-red-500">일</div>
+                <div class="p-2 text-center text-sm font-medium text-muted-foreground">월</div>
+                <div class="p-2 text-center text-sm font-medium text-muted-foreground">화</div>
+                <div class="p-2 text-center text-sm font-medium text-muted-foreground">수</div>
+                <div class="p-2 text-center text-sm font-medium text-muted-foreground">목</div>
+                <div class="p-2 text-center text-sm font-medium text-muted-foreground">금</div>
+                <div class="p-2 text-center text-sm font-medium text-blue-500">토</div>
+            </div>
+            
+            <!-- 캘린더 날짜 -->
+            <div class="grid grid-cols-7 gap-1">
+                @foreach (var day in GetCalendarDays())
+                {
+                    var dayReservations = GetReservationsForDate(day);
+                    <div class="@GetDayClass(day) min-h-[80px] p-1 border border-border rounded-md cursor-pointer transition-colors hover:bg-muted/50" @onclick="() => SelectDate(day)">
+                        <div class="text-sm @(day.Date == DateTime.Today.Date ? "font-semibold text-primary" : day.Month != CurrentMonth.Month ? "text-muted-foreground" : "text-foreground")">
+                            @day.Day
+                        </div>
+                        @if (dayReservations.Any())
+                        {
+                            <div class="mt-1 space-y-1">
+                                @foreach (var reservation in dayReservations.Take(2))
+                                {
+                                    var vehicle = Vehicles?.FirstOrDefault(v => v.Id == reservation.VehicleId);
+                                    var vehicleColorClass = !string.IsNullOrEmpty(vehicle?.Color) ? vehicle.Color : "bg-gray-400";
+                                    
+                                    <div class="@vehicleColorClass text-white text-xs p-1 rounded truncate" title="차량ID: @reservation.VehicleId, 색상: @vehicle?.Color, 클래스: @vehicleColorClass">
+                                        @reservation.VehicleName (@reservation.UserName)
+                                    </div>
+                                }
+                                @if (dayReservations.Count() > 2)
+                                {
+                                    <div class="text-xs text-muted-foreground text-center">+@(dayReservations.Count() - 2)개</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- 선택된 날짜의 예약 현황 -->
+    <div class="bg-white rounded-lg shadow-sm border border-border">
+        <div class="p-4 border-b border-border">
+            <h3 class="text-lg font-semibold text-foreground">
+                @SelectedDate.ToString("yyyy년 MM월 dd일") 예약 현황
+            </h3>
+        </div>
+        <div class="p-4">
+            @if (FilteredReservations.Any())
+            {
+                <div class="space-y-3">
+                    @foreach (var reservation in FilteredReservations.Take(10))
+                    {
+                        var vehicle = Vehicles?.FirstOrDefault(v => v.Id == reservation.VehicleId);
+                        var vehicleColorClass = !string.IsNullOrEmpty(vehicle?.Color) ? vehicle.Color : "bg-gray-400";
+                        // 텍스트 색상은 배경색에서 bg-를 text-로 변경
+                        var vehicleTextColorClass = !string.IsNullOrEmpty(vehicle?.Color) ? vehicle.Color.Replace("bg-", "text-") : "text-gray-400";
+                        
+                        <div class="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-lg flex items-center justify-center @vehicleColorClass">
+                                    <span class="text-xl text-white">🚗</span>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-foreground">@reservation.VehicleName 
+                                        @if (vehicle != null)
+                                        {
+                                            <span class="text-xs @vehicleTextColorClass">●</span>
+                                        }
+                                    </p>
+                                    <p class="text-sm text-muted-foreground">@reservation.UserName (@reservation.Department)</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-medium text-foreground">
+                                    @reservation.StartTime - @reservation.EndTime
+                                </p>
+                                <p class="text-xs text-muted-foreground">@reservation.Purpose</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-8">
+                    <div class="text-4xl mb-2">📅</div>
+                    <p class="text-muted-foreground">선택한 날짜에 예약이 없습니다.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .calendar-day.today {
+        background-color: rgba(59, 130, 246, 0.1);
+        border-color: #3b82f6;
+    }
+    
+    .calendar-day.selected {
+        background-color: rgba(59, 130, 246, 0.2);
+        border-color: #3b82f6;
+    }
+    
+    .calendar-day.other-month {
+        opacity: 0.4;
+    }
+    
+    .calendar-day.has-reservations {
+        background-color: #eff6ff;
+    }
+</style>

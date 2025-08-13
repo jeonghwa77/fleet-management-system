@@ -1,0 +1,20 @@
+@* 모바일 연결 상태 알림 *@
+@code {
+    [Parameter] public string? UserName { get; set; }
+    [Parameter] public string ConnectionStatus { get; set; } = "online";
+    [Parameter] public bool IsUsingMockData { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+}
+<div class="flex items-center justify-between mb-4 p-3 bg-muted rounded-lg">
+    <div class="flex items-center space-x-2">
+        <span class="badge">@ConnectionStatus</span>
+        <span class="text-sm">@(IsUsingMockData ? "로컬 데이터 사용중" : "서버 연결됨")</span>
+    </div>
+    <div class="flex items-center space-x-2">
+        <span class="text-sm text-muted-foreground">@UserName</span>
+        @if (ConnectionStatus == "offline")
+        {
+            <button class="btn btn-outline btn-sm" @onclick="OnRetry">🔄</button>
+        }
+    </div>
+</div>

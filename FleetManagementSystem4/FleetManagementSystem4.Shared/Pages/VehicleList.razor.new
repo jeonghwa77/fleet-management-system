@@ -1,0 +1,620 @@
+@page "/vehicles"
+@using FleetManagementSystem4.Shared.Models
+
+<div class="min-h-screen bg-background">
+    <!-- 상단 헤더 -->
+    <div class="bg-white border-b border-border">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <span class="text-xl text-primary">🚗</span>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-foreground">차량 관리</h1>
+                        <p class="text-sm text-muted-foreground">
+                            회사 차량을 관리하고 각 차량의 정보와 색상을 설정하세요.
+                        </p>
+                    </div>
+                </div>
+                @if (onAdd.HasDelegate)
+                {
+                    <button @onclick="ShowAddModal"
+                            class="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors font-medium flex items-center space-x-2">
+                        <span>➕</span>
+                        <span>차량 추가</span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- 차량 목록 -->
+        <div class="@(isMobile ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4")">
+            @foreach (var vehicle in vehicles)
+            {
+                <div class="bg-card rounded-lg shadow-sm border border-border relative overflow-visible">
+                    <div class="p-4 pb-3 overflow-visible">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-4 h-4 rounded @GetVehicleColor(vehicle.Id, vehicle.Color)"
+                                     title="캘린더 색상: @GetColorLabel(vehicle.Color ?? GetVehicleColor(vehicle.Id, null))"></div>
+                                <h3 class="text-lg font-semibold text-foreground">@vehicle.Name</h3>
+                            </div>
+                            @if (onUpdate.HasDelegate || onDelete.HasDelegate)
+                            {
+                                <div class="flex space-x-1">
+                                    @if (onUpdate.HasDelegate)
+                                    {
+                                        <button @onclick="() => OpenEditDialog(vehicle)"
+                                                class="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+                                                title="차량 정보 수정">
+                                            <span class="text-sm">✏️</span>
+                                        </button>
+                                    }
+                                    @if (onDelete.HasDelegate)
+                                    {
+                                        <button @onclick="() => OpenDeleteDialog(vehicle)"
+                                                class="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                                title="차량 삭제">
+                                            <span class="text-sm">🗑️</span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    
+                    <div class="px-4 pb-4">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-muted-foreground">상태</span>
+                                @GetStatusBadge(vehicle.Status)
+                            </div>
+                            
+                            <div class="space-y-2 text-sm">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-muted-foreground">번호판:</span>
+                                    <span class="font-mono">@vehicle.LicensePlate</span>
+                                </div>
+                                
+                                <div class="flex items-center justify-between">
+                                    <span class="text-muted-foreground">차종:</span>
+                                    <span>@vehicle.Type</span>
+                                </div>
+                                
+                                <div class="flex items-center justify-between">
+                                    <span class="text-muted-foreground">연료:</span>
+                                    <div class="flex items-center space-x-1">
+                                        <span>@GetFuelIcon(vehicle.Fuel)</span>
+                                        <span>@vehicle.Fuel</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center justify-between">
+                                    <span class="text-muted-foreground">승차인원:</span>
+                                    <div class="flex items-center space-x-1">
+                                        <span>👥</span>
+                                        <span>@vehicle.Capacity명</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- 차량 추가 모달 -->
+@if (showAddDialog)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between p-6 border-b border-border">
+                <h2 class="text-xl font-semibold text-foreground">새 차량 추가</h2>
+                <button @onclick="() => showAddDialog = false"
+                        class="text-muted-foreground hover:text-foreground p-2 rounded-md transition-colors">
+                    ✕
+                </button>
+            </div>
+            
+            <form @onsubmit="HandleAddVehicle" @onsubmit:preventDefault="true" class="p-6 space-y-4">
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span>⚠️</span>
+                            <span>@error</span>
+                        </div>
+                    </div>
+                }
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">차량명 *</label>
+                    <input @bind="newVehicle.Name" 
+                           class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                           placeholder="예: 현대 그랜저" />
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">차종 *</label>
+                    <select @bind="newVehicle.Type"
+                            class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <option value="">차종 선택</option>
+                        @foreach (var type in VehicleTypes)
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">번호판 *</label>
+                    <input @bind="newVehicle.LicensePlate" 
+                           class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                           placeholder="예: 서울12가3456" />
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">연료 타입 *</label>
+                    <select @bind="newVehicle.Fuel"
+                            class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <option value="">연료 선택</option>
+                        @foreach (var fuel in FuelTypes)
+                        {
+                            <option value="@fuel">@fuel</option>
+                        }
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">승차인원</label>
+                    <input @bind="newVehicle.Capacity" type="number" min="1" max="50"
+                           class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">상태</label>
+                    <select @bind="newVehicle.Status"
+                            class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <option value="Available">운행 가능</option>
+                        <option value="InUse">운행 중</option>
+                        <option value="Maintenance">정비 중</option>
+                        <option value="OutOfService">운행 불가</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">캘린더 색상</label>
+                    <div class="grid grid-cols-6 gap-2">
+                        @foreach (var color in DefaultColors)
+                        {
+                            <button type="button" @onclick="() => newVehicle.Color = color.Value"
+                                    class="w-8 h-8 rounded border-2 @(newVehicle.Color == color.Value ? "border-gray-900" : "border-gray-300") @color.Value"
+                                    title="@color.Label">
+                            </button>
+                        }
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-2 pt-4 border-t border-border">
+                    <button type="button" @onclick="() => showAddDialog = false"
+                            class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                        취소
+                    </button>
+                    <button type="submit" disabled="@isSubmitting"
+                            class="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50">
+                        @if (isSubmitting)
+                        {
+                            <span>추가 중...</span>
+                        }
+                        else
+                        {
+                            <span>추가</span>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+<!-- 차량 수정 모달 -->
+@if (showEditDialog && selectedVehicle != null)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between p-6 border-b border-border">
+                <h2 class="text-xl font-semibold text-foreground">차량 정보 수정</h2>
+                <button @onclick="() => showEditDialog = false"
+                        class="text-muted-foreground hover:text-foreground p-2 rounded-md transition-colors">
+                    ✕
+                </button>
+            </div>
+            
+            <form @onsubmit="HandleUpdateVehicle" @onsubmit:preventDefault="true" class="p-6 space-y-4">
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span>⚠️</span>
+                            <span>@error</span>
+                        </div>
+                    </div>
+                }
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">차량명 *</label>
+                    <input @bind="editVehicle.Name" 
+                           class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                           placeholder="예: 현대 그랜저" />
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">차종 *</label>
+                    <select @bind="editVehicle.Type"
+                            class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <option value="">차종 선택</option>
+                        @foreach (var type in VehicleTypes)
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">번호판 *</label>
+                    <input @bind="editVehicle.LicensePlate" 
+                           class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                           placeholder="예: 서울12가3456" />
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">연료 타입 *</label>
+                    <select @bind="editVehicle.Fuel"
+                            class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <option value="">연료 선택</option>
+                        @foreach (var fuel in FuelTypes)
+                        {
+                            <option value="@fuel">@fuel</option>
+                        }
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">승차인원</label>
+                    <input @bind="editVehicle.Capacity" type="number" min="1" max="50"
+                           class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">상태</label>
+                    <select @bind="editVehicle.Status"
+                            class="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20">
+                        <option value="Available">운행 가능</option>
+                        <option value="InUse">운행 중</option>
+                        <option value="Maintenance">정비 중</option>
+                        <option value="OutOfService">운행 불가</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="text-sm font-medium text-foreground mb-2 block">캘린더 색상</label>
+                    <div class="grid grid-cols-6 gap-2">
+                        @foreach (var color in DefaultColors)
+                        {
+                            <button type="button" @onclick="() => editVehicle.Color = color.Value"
+                                    class="w-8 h-8 rounded border-2 @(editVehicle.Color == color.Value ? "border-gray-900" : "border-gray-300") @color.Value"
+                                    title="@color.Label">
+                            </button>
+                        }
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-2 pt-4 border-t border-border">
+                    <button type="button" @onclick="() => showEditDialog = false"
+                            class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                        취소
+                    </button>
+                    <button type="submit" disabled="@isSubmitting"
+                            class="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50">
+                        @if (isSubmitting)
+                        {
+                            <span>수정 중...</span>
+                        }
+                        else
+                        {
+                            <span>수정</span>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+<!-- 차량 삭제 확인 모달 -->
+@if (showDeleteDialog && selectedVehicle != null)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                        <span class="text-2xl text-red-600">⚠️</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-foreground">차량 삭제</h2>
+                        <p class="text-sm text-muted-foreground">이 작업은 되돌릴 수 없습니다.</p>
+                    </div>
+                </div>
+                
+                <p class="text-foreground mb-6">
+                    정말로 '<strong>@selectedVehicle.Name</strong>' 차량을 삭제하시겠습니까?
+                </p>
+                
+                <div class="flex justify-end space-x-2">
+                    <button @onclick="() => showDeleteDialog = false"
+                            class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                        취소
+                    </button>
+                    <button @onclick="HandleDeleteVehicle" disabled="@isSubmitting"
+                            class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors font-medium disabled:opacity-50">
+                        @if (isSubmitting)
+                        {
+                            <span>삭제 중...</span>
+                        }
+                        else
+                        {
+                            <span>삭제</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<Vehicle> vehicles { get; set; } = new();
+    [Parameter] public bool isMobile { get; set; } = false;
+    [Parameter] public EventCallback onRefresh { get; set; }
+    [Parameter] public EventCallback<Vehicle> onAdd { get; set; }
+    [Parameter] public EventCallback<(string id, Vehicle updates)> onUpdate { get; set; }
+    [Parameter] public EventCallback<string> onDelete { get; set; }
+
+    private bool showAddDialog = false;
+    private bool showEditDialog = false;
+    private bool showDeleteDialog = false;
+    private Vehicle? selectedVehicle = null;
+    private bool isSubmitting = false;
+    private string? error = null;
+
+    // 새 차량 추가 폼
+    private Vehicle newVehicle = new()
+    {
+        Name = "",
+        Type = "",
+        LicensePlate = "",
+        Fuel = "",
+        Capacity = 4,
+        Status = "Available",
+        Color = "bg-blue-500"
+    };
+
+    // 차량 수정 폼
+    private Vehicle editVehicle = new()
+    {
+        Name = "",
+        Type = "",
+        LicensePlate = "",
+        Fuel = "",
+        Capacity = 4,
+        Status = "Available",
+        Color = "bg-blue-500"
+    };
+
+    private readonly List<(string Value, string Label)> DefaultColors = new()
+    {
+        ("bg-blue-500", "파란색"),
+        ("bg-green-500", "초록색"),
+        ("bg-yellow-500", "노란색"),
+        ("bg-purple-500", "보라색"),
+        ("bg-pink-500", "분홍색"),
+        ("bg-indigo-500", "남색"),
+        ("bg-red-500", "빨간색"),
+        ("bg-orange-500", "주황색"),
+        ("bg-teal-500", "청록색"),
+        ("bg-cyan-500", "하늘색"),
+        ("bg-lime-500", "라임색"),
+        ("bg-emerald-500", "에메랄드색")
+    };
+
+    private readonly string[] VehicleTypes = { "승용차", "SUV", "승합차", "트럭", "버스", "기타" };
+    private readonly string[] FuelTypes = { "휘발유", "경유", "하이브리드", "전기", "LPG" };
+
+    private string GetVehicleColor(string vehicleId, string? customColor)
+    {
+        if (!string.IsNullOrEmpty(customColor)) return customColor;
+        
+        var hash = 0;
+        foreach (char c in vehicleId)
+        {
+            hash = (int)c + ((hash << 5) - hash);
+        }
+        var index = Math.Abs(hash) % DefaultColors.Count;
+        return DefaultColors[index].Value;
+    }
+
+    private string GetColorLabel(string colorValue)
+    {
+        var color = DefaultColors.FirstOrDefault(c => c.Value == colorValue);
+        return color.Label ?? "기본색";
+    }
+
+    private RenderFragment GetStatusBadge(string status)
+    {
+        var (text, className) = status switch
+        {
+            "Available" => ("운행 가능", "bg-green-100 text-green-800"),
+            "InUse" => ("운행 중", "bg-blue-100 text-blue-800"),
+            "Maintenance" => ("정비 중", "bg-orange-100 text-orange-800"),
+            "OutOfService" => ("운행 불가", "bg-red-100 text-red-800"),
+            _ => ("알 수 없음", "bg-gray-100 text-gray-800")
+        };
+
+        return @<span class="px-2 py-1 rounded-full text-xs font-medium @className">@text</span>;
+    }
+
+    private string GetFuelIcon(string fuelType)
+    {
+        return fuelType switch
+        {
+            "휘발유" => "⛽",
+            "경유" => "🛢️",
+            "하이브리드" => "🔋",
+            "전기" => "⚡",
+            "LPG" => "💨",
+            _ => "⛽"
+        };
+    }
+
+    private void ShowAddModal()
+    {
+        newVehicle = new Vehicle
+        {
+            Name = "",
+            Type = "",
+            LicensePlate = "",
+            Fuel = "",
+            Capacity = 4,
+            Status = "Available",
+            Color = DefaultColors[0].Value
+        };
+        showAddDialog = true;
+        error = null;
+    }
+
+    private void OpenEditDialog(Vehicle vehicle)
+    {
+        selectedVehicle = vehicle;
+        editVehicle = new Vehicle
+        {
+            Id = vehicle.Id,
+            Name = vehicle.Name,
+            Type = vehicle.Type,
+            LicensePlate = vehicle.LicensePlate,
+            Fuel = vehicle.Fuel,
+            Capacity = vehicle.Capacity,
+            Status = vehicle.Status,
+            Color = vehicle.Color ?? GetVehicleColor(vehicle.Id, null),
+            Year = vehicle.Year,
+            Mileage = vehicle.Mileage,
+            LastMaintenance = vehicle.LastMaintenance,
+            NextMaintenance = vehicle.NextMaintenance,
+            InsuranceExpiry = vehicle.InsuranceExpiry
+        };
+        showEditDialog = true;
+        error = null;
+    }
+
+    private void OpenDeleteDialog(Vehicle vehicle)
+    {
+        selectedVehicle = vehicle;
+        showDeleteDialog = true;
+        error = null;
+    }
+
+    private async Task HandleAddVehicle()
+    {
+        if (string.IsNullOrEmpty(newVehicle.Name) || string.IsNullOrEmpty(newVehicle.Type) || 
+            string.IsNullOrEmpty(newVehicle.LicensePlate) || string.IsNullOrEmpty(newVehicle.Fuel))
+        {
+            error = "모든 필수 항목을 입력해주세요.";
+            return;
+        }
+
+        isSubmitting = true;
+        error = null;
+
+        try
+        {
+            if (onAdd.HasDelegate)
+            {
+                await onAdd.InvokeAsync(newVehicle);
+                showAddDialog = false;
+                ShowAddModal(); // 폼 리셋
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"차량 추가에 실패했습니다: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task HandleUpdateVehicle()
+    {
+        if (string.IsNullOrEmpty(editVehicle.Name) || string.IsNullOrEmpty(editVehicle.Type) || 
+            string.IsNullOrEmpty(editVehicle.LicensePlate) || string.IsNullOrEmpty(editVehicle.Fuel))
+        {
+            error = "모든 필수 항목을 입력해주세요.";
+            return;
+        }
+
+        if (selectedVehicle == null) return;
+
+        isSubmitting = true;
+        error = null;
+
+        try
+        {
+            if (onUpdate.HasDelegate)
+            {
+                await onUpdate.InvokeAsync((selectedVehicle.Id, editVehicle));
+                showEditDialog = false;
+                selectedVehicle = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"차량 수정에 실패했습니다: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task HandleDeleteVehicle()
+    {
+        if (selectedVehicle == null) return;
+
+        isSubmitting = true;
+        error = null;
+
+        try
+        {
+            if (onDelete.HasDelegate)
+            {
+                await onDelete.InvokeAsync(selectedVehicle.Id);
+                showDeleteDialog = false;
+                selectedVehicle = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"차량 삭제에 실패했습니다: {ex.Message}";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

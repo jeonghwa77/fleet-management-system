@@ -1,0 +1,338 @@
+@using FleetManagementSystem4.Shared.Models
+
+@code {
+    [Parameter] public Reservation? Reservation { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Reservation> OnSave { get; set; }
+    [Parameter] public EventCallback<string> OnDelete { get; set; }
+    [Parameter] public EventCallback<(string Id, string Status)> OnStatusChange { get; set; }
+
+    private bool IsEditing { get; set; } = false;
+    private bool IsLoading { get; set; } = false;
+    private Reservation EditingReservation { get; set; } = new();
+
+    // Helper properties for date inputs
+    private DateTime? EditingStartDate
+    {
+        get => DateTime.TryParse(EditingReservation.StartDate, out var date) ? date : null;
+        set => EditingReservation.StartDate = value?.ToString("yyyy-MM-dd") ?? "";
+    }
+
+    private DateTime? EditingEndDate
+    {
+        get => DateTime.TryParse(EditingReservation.EndDate, out var date) ? date : null;
+        set => EditingReservation.EndDate = value?.ToString("yyyy-MM-dd") ?? "";
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Reservation != null)
+        {
+            EditingReservation = new Reservation
+            {
+                Id = Reservation.Id,
+                VehicleId = Reservation.VehicleId,
+                VehicleName = Reservation.VehicleName,
+                UserId = Reservation.UserId,
+                UserName = Reservation.UserName,
+                Department = Reservation.Department,
+                StartDate = Reservation.StartDate,
+                EndDate = Reservation.EndDate,
+                Purpose = Reservation.Purpose,
+                Status = Reservation.Status,
+                Description = Reservation.Description
+            };
+        }
+    }
+
+    private async Task SaveReservation()
+    {
+        IsLoading = true;
+        await Task.Delay(500); // API 호출 시뮬레이션
+        await OnSave.InvokeAsync(EditingReservation);
+        IsEditing = false;
+        IsLoading = false;
+    }
+
+    private async Task ChangeStatus(string status)
+    {
+        IsLoading = true;
+        await Task.Delay(500);
+        await OnStatusChange.InvokeAsync((Reservation!.Id, status));
+        IsLoading = false;
+    }
+
+    private async Task DeleteReservation()
+    {
+        if (Reservation != null)
+        {
+            IsLoading = true;
+            await Task.Delay(500);
+            await OnDelete.InvokeAsync(Reservation.Id);
+            IsLoading = false;
+        }
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "approved" or "Approved" => "bg-green-100 text-green-700",
+            "pending" or "Pending" => "bg-yellow-100 text-yellow-700",
+            "completed" or "Completed" => "bg-blue-100 text-blue-700",
+            "cancelled" or "Cancelled" => "bg-red-100 text-red-700",
+            _ => "bg-gray-100 text-gray-700"
+        };
+    }
+
+    private string GetStatusText(string status)
+    {
+        return status switch
+        {
+            "approved" or "Approved" => "승인됨",
+            "pending" or "Pending" => "대기 중",
+            "completed" or "Completed" => "완료됨",
+            "cancelled" or "Cancelled" => "취소됨",
+            _ => status
+        };
+    }
+}
+
+@if (Reservation != null)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <!-- 헤더 -->
+            <div class="flex items-center justify-between p-6 border-b border-border">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <span class="text-2xl">📝</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-foreground">
+                            @(IsEditing ? "예약 정보 수정" : "예약 상세 정보")
+                        </h2>
+                        <p class="text-sm text-muted-foreground">
+                            @Reservation.VehicleName - @Reservation.UserName
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="@GetStatusClass(Reservation.Status) px-3 py-1 rounded-full text-sm font-medium">
+                        @GetStatusText(Reservation.Status)
+                    </span>
+                    <button @onclick="OnClose" 
+                            class="text-muted-foreground hover:text-foreground p-2 rounded-md transition-colors">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- 본문 -->
+            <div class="p-6">
+                @if (IsEditing)
+                {
+                    <!-- 편집 모드 -->
+                    <div class="space-y-6">
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">차량</label>
+                                <input @bind="EditingReservation.VehicleName" readonly
+                                       class="w-full px-3 py-2 border border-input rounded-lg bg-muted cursor-not-allowed" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">예약자</label>
+                                <input @bind="EditingReservation.UserName" readonly
+                                       class="w-full px-3 py-2 border border-input rounded-lg bg-muted cursor-not-allowed" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">부서</label>
+                                <input @bind="EditingReservation.Department" readonly
+                                       class="w-full px-3 py-2 border border-input rounded-lg bg-muted cursor-not-allowed" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">상태</label>
+                                <select @bind="EditingReservation.Status" 
+                                        class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring">
+                                    <option value="pending">대기 중</option>
+                                    <option value="approved">승인됨</option>
+                                    <option value="completed">완료됨</option>
+                                    <option value="cancelled">취소됨</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">시작 날짜</label>
+                                <input @bind="EditingStartDate" type="date" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">시작 시간</label>
+                                <input @bind="EditingReservation.StartTime" type="text" pattern="[0-9]{2}:[0-9]{2}" placeholder="HH:MM"
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">종료 날짜</label>
+                                <input @bind="EditingEndDate" type="date" 
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-foreground mb-2">종료 시간</label>
+                                <input @bind="EditingReservation.EndTime" type="text" pattern="[0-9]{2}:[0-9]{2}" placeholder="HH:MM"
+                                       class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">사용 목적</label>
+                            <input @bind="EditingReservation.Purpose" 
+                                   class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">상세 설명</label>
+                            <textarea @bind="EditingReservation.Description" rows="3" 
+                                      class="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                                      placeholder="추가 설명이나 특이사항을 입력하세요"></textarea>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <!-- 보기 모드 -->
+                    <div class="space-y-6">
+                        <!-- 예약 정보 -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                <span class="mr-2">📋</span>
+                                예약 정보
+                            </h3>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">차량:</span>
+                                    <span class="font-medium text-foreground">@Reservation.VehicleName</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">예약자:</span>
+                                    <span class="font-medium text-foreground">@Reservation.UserName</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">부서:</span>
+                                    <span class="font-medium text-foreground">@Reservation.Department</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-muted">
+                                    <span class="text-muted-foreground">상태:</span>
+                                    <span class="@GetStatusClass(Reservation.Status) px-2 py-1 rounded-full text-xs font-medium">
+                                        @GetStatusText(Reservation.Status)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 사용 일정 -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                <span class="mr-2">🕒</span>
+                                사용 일정
+                            </h3>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div class="bg-muted/50 p-4 rounded-lg">
+                                    <div class="text-sm text-muted-foreground">시작 일시</div>
+                                    <div class="font-medium text-foreground">@Reservation.StartDate @Reservation.StartTime</div>
+                                </div>
+                                <div class="bg-muted/50 p-4 rounded-lg">
+                                    <div class="text-sm text-muted-foreground">종료 일시</div>
+                                    <div class="font-medium text-foreground">@Reservation.EndDate @Reservation.EndTime</div>
+                                </div>
+                            </div>
+                            <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+                                <div class="text-sm text-blue-600">사용 기간</div>
+                                <div class="font-medium text-blue-800">
+                                    @(Reservation.Duration.Days)일 
+                                    @(Reservation.Duration.Hours)시간
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 목적 및 설명 -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center">
+                                <span class="mr-2">📝</span>
+                                목적 및 설명
+                            </h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="text-sm text-muted-foreground mb-1">사용 목적</div>
+                                    <div class="p-3 bg-muted/50 rounded-lg text-foreground">@Reservation.Purpose</div>
+                                </div>
+                                @if (!string.IsNullOrEmpty(Reservation.Description))
+                                {
+                                    <div>
+                                        <div class="text-sm text-muted-foreground mb-1">상세 설명</div>
+                                        <div class="p-3 bg-muted/50 rounded-lg text-foreground whitespace-pre-wrap">@Reservation.Description</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- 푸터 -->
+            <div class="flex items-center justify-between p-6 border-t border-border">
+                @if (IsEditing)
+                {
+                    <button @onclick="DeleteReservation" 
+                            class="border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground px-4 py-2 rounded-lg transition-colors font-medium"
+                            disabled="@IsLoading">
+                        삭제
+                    </button>
+                    <div class="flex space-x-2">
+                        <button @onclick="() => IsEditing = false" 
+                                class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                            취소
+                        </button>
+                        <button @onclick="SaveReservation" 
+                                class="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors font-medium"
+                                disabled="@IsLoading">
+                            @(IsLoading ? "저장 중..." : "저장")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="flex space-x-2">
+                        @if (Reservation.Status == "pending")
+                        {
+                            <button @onclick='() => ChangeStatus("approved")' 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+                                    disabled="@IsLoading">
+                                승인
+                            </button>
+                            <button @onclick='() => ChangeStatus("cancelled")' 
+                                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+                                    disabled="@IsLoading">
+                                취소
+                            </button>
+                        }
+                        @if (Reservation.Status == "approved")
+                        {
+                            <button @onclick='() => ChangeStatus("completed")' 
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+                                    disabled="@IsLoading">
+                                완료 처리
+                            </button>
+                        }
+                        <button @onclick="() => IsEditing = true" 
+                                class="bg-secondary hover:bg-secondary/80 text-secondary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                            수정
+                        </button>
+                    </div>
+                    <button @onclick="OnClose" 
+                            class="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg transition-colors font-medium">
+                        닫기
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}

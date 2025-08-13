@@ -1,0 +1,13 @@
+@* 오프라인 모드 알림 *@
+@code {
+    [Parameter] public bool IsUsingMockData { get; set; }
+    [Parameter] public string Status { get; set; } = "online";
+    [Parameter] public EventCallback OnRetry { get; set; }
+}
+@if (Status == "offline")
+{
+    <div class="alert alert-warning">
+        <span>오프라인 모드입니다. 서버 연결을 재시도하려면 클릭하세요.</span>
+        <button class="btn btn-sm" @onclick="OnRetry">재시도</button>
+    </div>
+}

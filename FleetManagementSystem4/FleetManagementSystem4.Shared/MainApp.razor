@@ -1,0 +1,901 @@
+@page "/"
+@using Microsoft.AspNetCore.Components
+@using FleetManagementSystem4.Shared.Models
+@using FleetManagementSystem4.Shared.Pages
+@using FleetManagementSystem4.Shared.Components
+@using FleetManagementSystem4.Shared.Services
+@using FleetManagementSystem4.Shared.Layout
+
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject SupabaseService SupabaseService
+@inject IJSRuntime JSRuntime
+
+@if (IsAuthChecking)
+{
+    <div class="min-h-screen bg-background flex items-center justify-center">
+        <div class="text-center">
+            <div class="animate-spin">🔄</div>
+            <p class="text-muted-foreground mt-4">인증 상태를 확인하는 중...</p>
+        </div>
+    </div>
+}
+else if (!IsAuthenticated)
+{
+    <AuthScreen @ref="authScreenRef"
+                OnSignIn="@(args => HandleSignIn(args.Email, args.Password))" 
+                OnSignUp="@HandleSignUp" />
+}
+else
+{
+    <div class="min-h-screen bg-background">
+        <!-- PWA 스타일 헤더 -->
+        <div class="sticky top-0 z-50 bg-background border-b border-border">
+            <div class="container mx-auto px-4 md:px-6">
+                <div class="flex items-center justify-between h-14 md:h-16">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex items-center justify-center w-8 h-8 bg-primary rounded-lg">
+                            <span class="text-primary-foreground text-xl">🚗</span>
+                        </div>
+                        <div>
+                            <h1 class="text-lg md:text-xl font-semibold text-foreground">법인차량 예약관리</h1>
+                            <p class="text-sm text-muted-foreground hidden md:block">회사 차량을 효율적으로 관리하고 예약하세요</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm text-muted-foreground hidden md:block">
+                            @UserName
+                        </span>
+                        <button class="h-8 w-8 p-0 bg-transparent hover:bg-muted rounded-md text-muted-foreground transition-colors" 
+                                @onclick="HandleSignOut" 
+                                title="로그아웃">
+                            <span class="text-base">↗</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 메인 컨텐츠 -->
+        <div class="container mx-auto px-4 md:px-6 py-6 max-w-6xl">
+            
+            <!-- 탭 네비게이션 -->
+            <div class="grid w-full grid-cols-4 mb-6 bg-muted rounded-lg p-1">
+                <button class="@GetTabClass("dashboard")" @onclick="@(() => SetActiveTab("dashboard"))">
+                    <span class="mr-2">📊</span>
+                    <span class="text-xs md:text-sm">대시보드</span>
+                </button>
+                <button class="@GetTabClass("vehicles")" @onclick="@(() => SetActiveTab("vehicles"))">
+                    <span class="mr-2">🚗</span>
+                    <span class="text-xs md:text-sm">차량 목록</span>
+                </button>
+                <button class="@GetTabClass("reservation")" @onclick="@(() => SetActiveTab("reservation"))">
+                    <span class="mr-2">➕</span>
+                    <span class="text-xs md:text-sm">예약 신청</span>
+                </button>
+                <button class="@GetTabClass("management")" @onclick="@(() => SetActiveTab("management"))">
+                    <span class="mr-2">📋</span>
+                    <span class="text-xs md:text-sm">예약 관리</span>
+                </button>
+            </div>
+
+            <!-- 탭 컨텐츠 -->
+            <div class="space-y-4">
+                @if (ActiveTab == "dashboard")
+                {
+                    <Dashboard Vehicles="@SampleVehicles" 
+                              Reservations="@Reservations"
+                              IsMobile="@IsMobile" />
+                }
+                else if (ActiveTab == "vehicles")
+                {
+                    <VehicleList vehicles="@SampleVehicles" 
+                                 isMobile="@false"
+                                 onAdd="@OnAddVehicle"
+                                 onUpdate="@OnUpdateVehicle" 
+                                 onDelete="@OnDeleteVehicle" />
+                }
+                else if (ActiveTab == "reservation")
+                {
+                    <ReservationForm Vehicles="@SampleVehicles"
+                                   ExistingReservations="@Reservations"
+                                   CurrentUser="@CurrentUserInfo"
+                                   OnSubmit="@HandleAddReservation" />
+                }
+                else if (ActiveTab == "management")
+                {
+                    <ReservationManagement3 Reservations="@Reservations" 
+                                          Vehicles="@SampleVehicles"
+                                          CurrentUser="@CurrentUserInfo"
+                                          OnReservationCancelled="@HandleReservationCancelled"
+                                          OnReservationCompleted="@HandleReservationCompleted" />
+                }
+                else
+                {
+                    <div class="bg-red-100 p-4 rounded">
+                        <p>알 수 없는 탭: @ActiveTab</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsAuthChecking { get; set; } = true;
+    private bool IsAuthenticated => AuthService.IsAuthenticated;
+    private string? UserName => AuthService.UserName;
+    private string? Error { get; set; }
+    private string ActiveTab { get; set; } = "dashboard";
+    private bool IsMobile { get; set; } = false;
+
+    // EventCallback 프로퍼티들
+    private EventCallback<Vehicle> OnAddVehicle => EventCallback.Factory.Create<Vehicle>(this, HandleAddVehicle);
+    private EventCallback<(string, Vehicle)> OnUpdateVehicle => EventCallback.Factory.Create<(string, Vehicle)>(this, HandleUpdateVehicle);
+    private EventCallback<string> OnDeleteVehicle => EventCallback.Factory.Create<string>(this, HandleDeleteVehicle);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 인증 상태 확인 시뮬레이션
+        await Task.Delay(800); 
+        IsAuthChecking = false;
+        
+        // 로그인된 사용자 정보 업데이트
+        UpdateCurrentUserInfo();
+        
+        // Supabase에서 데이터 로드
+        await LoadDataFromSupabase();
+        
+        // 자동 완료 처리 타이머 시작 (1분마다 실행)
+        _ = StartAutoCompletionTimer();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // 화면 너비 확인 (768px 이하면 모바일로 간주)
+                var width = await JSRuntime.InvokeAsync<int>("eval", "window.innerWidth");
+                IsMobile = width <= 768;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"화면 크기 감지 오류: {ex.Message}");
+                // 기본값으로 데스크톱 사용
+                IsMobile = false;
+            }
+        }
+    }
+
+    private async Task LoadDataFromSupabase()
+    {
+        try
+        {
+            // 차량 데이터 로드
+            await LoadVehiclesFromSupabase();
+            
+            // 예약 데이터 로드
+            await LoadReservationsFromSupabase();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"데이터 로드 오류: {ex.Message}");
+        }
+    }
+
+    private async Task LoadVehiclesFromSupabase()
+    {
+        try
+        {
+            var vehicles = await SupabaseService.GetVehiclesAsync();
+            
+            if (vehicles.Count > 0)
+            {
+                SampleVehicles = vehicles;
+                Console.WriteLine($"Supabase에서 {vehicles.Count}개 차량 로드됨");
+            }
+            else
+            {
+                Console.WriteLine("Supabase에서 차량 데이터가 없어서 기본 샘플 데이터 사용");
+                LoadDefaultVehicleData();
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"차량 로드 오류: {ex.Message}");
+            Console.WriteLine("오류로 인해 기본 샘플 데이터 사용");
+            LoadDefaultVehicleData();
+            StateHasChanged();
+        }
+    }
+
+    private void LoadDefaultVehicleData()
+    {
+        SampleVehicles = new List<Vehicle>
+        {
+            new Vehicle
+            {
+                Id = "vehicle_1",
+                Name = "스타리아",
+                Type = "승합차",
+                LicensePlate = "839루7772",
+                Capacity = 5,
+                Fuel = "휘발유",
+                Status = "Available",
+                Color = "blue",
+                Description = "승합차량, 단체 이동용",
+                Year = 2023,
+                Mileage = 15000,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            },
+            new Vehicle
+            {
+                Id = "vehicle_2",
+                Name = "코나",
+                Type = "승용차",
+                LicensePlate = "264어7952",
+                Capacity = 5,
+                Fuel = "휘발유",
+                Status = "Available",
+                Color = "green",
+                Description = "소형 SUV, 시내 이동용",
+                Year = 2022,
+                Mileage = 25000,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            },
+            new Vehicle
+            {
+                Id = "vehicle_3",
+                Name = "투싼",
+                Type = "승용차",
+                LicensePlate = "134너8690",
+                Capacity = 5,
+                Fuel = "휘발유",
+                Status = "Available",
+                Color = "red",
+                Description = "중형 SUV, 일반 업무용",
+                Year = 2023,
+                Mileage = 18000,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            },
+            new Vehicle
+            {
+                Id = "vehicle_4",
+                Name = "봉고",
+                Type = "화물차",
+                LicensePlate = "91주8861",
+                Capacity = 4,
+                Fuel = "휘발유",
+                Status = "Available",
+                Color = "orange",
+                Description = "소형 화물차, 물품 운송용",
+                Year = 2021,
+                Mileage = 45000,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            }
+        };
+    }
+
+
+
+    private void UpdateCurrentUserInfo()
+    {
+        if (IsAuthenticated && AuthService.CurrentUser != null)
+        {
+            CurrentUserInfo = AuthService.CurrentUser;
+        }
+        else
+        {
+            // 기본값 설정 (로그인하지 않은 경우)
+            CurrentUserInfo = new User
+            {
+                Id = "guest",
+                Name = "게스트",
+                Department = "미정",
+                Email = "guest@company.com"
+            };
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleSignIn(string email, string password)
+    {
+        IsAuthChecking = true;
+        var result = await AuthService.SignInAsync(email, password);
+        IsAuthChecking = false;
+        
+        if (result)
+        {
+            // 로그인 성공 시 사용자 정보 업데이트
+            UpdateCurrentUserInfo();
+            NavigationManager.NavigateTo("/dashboard");
+        }
+        else
+        {
+            Error = "로그인에 실패했습니다. 이메일과 비밀번호를 확인하세요.";
+        }
+    }
+
+    private AuthScreen? authScreenRef;
+
+    private async Task HandleSignUp(AuthScreen.AuthScreenSignUpArgs args)
+    {
+        try
+        {
+            var result = await AuthService.SignUpAsync(args.Email, args.Password, args.Name, args.Department);
+            
+            if (result.Success)
+            {
+                // 회원가입 성공 시 AuthScreen에 성공 메시지 표시
+                authScreenRef?.ShowSignUpSuccess();
+            }
+            else
+            {
+                // 회원가입 실패 시 오류 메시지 표시
+                authScreenRef?.ShowSignUpError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"회원가입 처리 오류: {ex.Message}");
+            authScreenRef?.ShowSignUpError("회원가입 처리 중 오류가 발생했습니다.");
+        }
+    }
+
+    private void HandleSignOut()
+    {
+        Console.WriteLine("🚪 로그아웃 버튼 클릭됨");
+        AuthService.SignOut();
+        Console.WriteLine("✅ 로그아웃 처리 완료");
+        NavigationManager.NavigateTo("/");
+        Console.WriteLine("🔄 홈으로 리다이렉트 완료");
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        Console.WriteLine($"🔄 탭 변경 이벤트 발생: {ActiveTab} -> {tab}");
+        ActiveTab = tab;
+        StateHasChanged();
+        Console.WriteLine($"✅ 탭 변경 완료: 현재 탭 = {ActiveTab}");
+    }
+
+    private string GetTabClass(string tab)
+    {
+        var baseClass = "flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md transition-colors";
+        var activeClass = "bg-background text-foreground shadow-sm";
+        var inactiveClass = "text-muted-foreground hover:text-foreground";
+        
+        return ActiveTab == tab ? $"{baseClass} {activeClass}" : $"{baseClass} {inactiveClass}";
+    }
+
+    // 차량 데이터 (Supabase에서 로드됨)
+    private List<Vehicle> SampleVehicles { get; set; } = new();
+
+    // 예약 데이터 (Supabase에서 로드됨)
+    private List<Reservation> Reservations { get; set; } = new();
+
+    // 현재 사용자 정보 (동적으로 업데이트됨)
+    private User CurrentUserInfo { get; set; } = new();
+
+    // 차량 CRUD 메서드들
+    private async Task HandleAddVehicle(Vehicle vehicle)
+    {
+        try
+        {
+            Console.WriteLine($"차량 추가 시작: {vehicle.Name}");
+            
+            vehicle.Id = Guid.NewGuid().ToString();
+            vehicle.CreatedAt = DateTime.Now;
+            vehicle.UpdatedAt = DateTime.Now;
+            
+            Console.WriteLine($"Supabase에 차량 저장 시도...");
+            
+            // Supabase에 차량 저장
+            var success = await SupabaseService.AddVehicleAsync(vehicle);
+            
+            Console.WriteLine($"Supabase 저장 결과: {success}");
+            
+            if (success)
+            {
+                SampleVehicles.Add(vehicle);
+                Console.WriteLine($"차량이 Supabase에 저장됨: {vehicle.Name}, ID: {vehicle.Id}");
+                
+                // Supabase에서 다시 조회해서 확인
+                var vehicles = await SupabaseService.GetVehiclesAsync();
+                Console.WriteLine($"Supabase에서 조회된 총 차량 수: {vehicles.Count}");
+            }
+            else
+            {
+                Console.WriteLine("Supabase 저장 실패, 로컬에만 저장됨");
+                SampleVehicles.Add(vehicle);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"차량 추가 오류: {ex.Message}");
+            Console.WriteLine($"오류 스택: {ex.StackTrace}");
+            SampleVehicles.Add(vehicle);
+        }
+        
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task HandleUpdateVehicle((string id, Vehicle updates) args)
+    {
+        try
+        {
+            Console.WriteLine($"=== 차량 수정 처리 시작 ===");
+            Console.WriteLine($"수정할 차량 ID: {args.id}");
+            Console.WriteLine($"수정할 차량명: {args.updates.Name}");
+            
+            var existingVehicle = SampleVehicles.FirstOrDefault(v => v.Id == args.id);
+            if (existingVehicle != null)
+            {
+                Console.WriteLine($"기존 차량 발견: {existingVehicle.Name}");
+                
+                // ID와 시간 정보 설정
+                args.updates.Id = args.id;
+                args.updates.CreatedAt = existingVehicle.CreatedAt; // 생성 시간 유지
+                args.updates.UpdatedAt = DateTime.Now;
+                
+                Console.WriteLine($"Supabase 차량 업데이트 시도...");
+                
+                // Supabase에서 차량 업데이트
+                var success = await SupabaseService.UpdateVehicleAsync(args.updates);
+                
+                Console.WriteLine($"Supabase 업데이트 결과: {success}");
+                
+                if (success)
+                {
+                    var index = SampleVehicles.IndexOf(existingVehicle);
+                    SampleVehicles[index] = args.updates;
+                    Console.WriteLine($"차량이 성공적으로 업데이트됨: {args.updates.Name}");
+                }
+                else
+                {
+                    Console.WriteLine("Supabase 업데이트 실패, 로컬에만 저장됨");
+                    var index = SampleVehicles.IndexOf(existingVehicle);
+                    SampleVehicles[index] = args.updates;
+                }
+            }
+            else
+            {
+                Console.WriteLine($"기존 차량을 찾을 수 없음: {args.id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"=== 차량 수정 처리 오류 ===");
+            Console.WriteLine($"오류 메시지: {ex.Message}");
+            Console.WriteLine($"오류 스택: {ex.StackTrace}");
+            
+            var existingVehicle = SampleVehicles.FirstOrDefault(v => v.Id == args.id);
+            if (existingVehicle != null)
+            {
+                var index = SampleVehicles.IndexOf(existingVehicle);
+                args.updates.Id = args.id;
+                SampleVehicles[index] = args.updates;
+                Console.WriteLine("로컬 목록만 업데이트됨");
+            }
+        }
+        
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task HandleDeleteVehicle(string vehicleId)
+    {
+        try
+        {
+            var vehicle = SampleVehicles.FirstOrDefault(v => v.Id == vehicleId);
+            if (vehicle != null)
+            {
+                // Supabase에서 차량 삭제
+                var success = await SupabaseService.DeleteVehicleAsync(vehicleId);
+                
+                if (success)
+                {
+                    SampleVehicles.Remove(vehicle);
+                    Console.WriteLine($"차량이 Supabase에서 삭제됨: {vehicle.Name}");
+                }
+                else
+                {
+                    Console.WriteLine("Supabase 삭제 실패, 로컬에서만 삭제됨");
+                    SampleVehicles.Remove(vehicle);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"차량 삭제 오류: {ex.Message}");
+            var vehicle = SampleVehicles.FirstOrDefault(v => v.Id == vehicleId);
+            if (vehicle != null)
+            {
+                SampleVehicles.Remove(vehicle);
+            }
+        }
+        
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    // 예약 CRUD 메서드들
+    private async Task LoadReservationsFromSupabase()
+    {
+        try
+        {
+            Reservations = await SupabaseService.GetReservationsAsync();
+            
+            if (Reservations.Count > 0)
+            {
+                Console.WriteLine($"Supabase에서 {Reservations.Count}개 예약 로드됨");
+            }
+            else
+            {
+                Console.WriteLine("Supabase에서 예약 데이터가 없습니다");
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"예약 로드 오류: {ex.Message}");
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleAddReservation(Reservation reservation)
+    {
+        Console.WriteLine($"=== 예약 추가 요청 ===");
+        Console.WriteLine($"예약자: {reservation.UserName} ({reservation.Department})");
+        Console.WriteLine($"차량: {reservation.VehicleName} (ID: {reservation.VehicleId})");
+        Console.WriteLine($"기간: {reservation.StartDate} {reservation.StartTime} ~ {reservation.EndDate} {reservation.EndTime}");
+        Console.WriteLine($"목적: {reservation.Purpose}");
+        Console.WriteLine($"상태: {reservation.Status}");
+        
+        try
+        {
+            // UUID가 없으면 생성
+            if (string.IsNullOrEmpty(reservation.Id))
+            {
+                reservation.Id = Guid.NewGuid().ToString();
+                Console.WriteLine($"예약 ID 생성: {reservation.Id}");
+            }
+            
+            // Supabase에 예약 저장
+            Console.WriteLine("Supabase에 예약 저장 시도...");
+            var success = await SupabaseService.AddReservationAsync(reservation);
+            
+            if (success)
+            {
+                Console.WriteLine("✅ Supabase 저장 성공!");
+                
+                // 로컬 리스트에도 추가
+                Reservations.Add(reservation);
+                Console.WriteLine($"로컬 리스트에 추가 완료. 총 예약 수: {Reservations.Count}");
+                
+                // 차량 상태 업데이트
+                var vehicle = SampleVehicles.FirstOrDefault(v => v.Id == reservation.VehicleId);
+                if (vehicle != null)
+                {
+                    var oldStatus = vehicle.Status;
+                    if (reservation.Status == "reserved" || reservation.Status == "in_use")
+                    {
+                        vehicle.Status = "InUse";
+                    }
+                    else if (reservation.Status == "completed" || reservation.Status == "cancelled")
+                    {
+                        vehicle.Status = "Available";
+                    }
+                    Console.WriteLine($"차량 상태 업데이트: {oldStatus} → {vehicle.Status}");
+                    
+                    // 차량 정보도 Supabase에 업데이트
+                    await SupabaseService.UpdateVehicleAsync(vehicle);
+                }
+                
+                Console.WriteLine("=== 예약 추가 완료! ===");
+            }
+            else
+            {
+                Console.WriteLine("⚠️ Supabase 저장 실패, 로컬에만 저장");
+                Reservations.Add(reservation);
+                throw new Exception("Supabase에 예약을 저장하지 못했습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ 예약 저장 오류: {ex.Message}");
+            Console.WriteLine($"오류 타입: {ex.GetType().Name}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"내부 오류: {ex.InnerException.Message}");
+            }
+            
+            // 오류 시에도 로컬에는 저장 (오프라인 지원)
+            if (!Reservations.Any(r => r.Id == reservation.Id))
+            {
+                Reservations.Add(reservation);
+                Console.WriteLine("로컬에만 저장됨 (오프라인 모드)");
+            }
+            
+            // 사용자에게 오류 알림 (선택사항)
+            // throw; // 예외를 다시 던져서 ReservationForm에서 처리하도록 할 수 있음
+        }
+        
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private async Task HandleReservationCancelled(string reservationId)
+    {
+        Console.WriteLine($"=== 예약 취소 요청 ===");
+        Console.WriteLine($"예약 ID: {reservationId}");
+        
+        try
+        {
+            var reservation = Reservations.FirstOrDefault(r => r.Id == reservationId);
+            if (reservation != null)
+            {
+                Console.WriteLine($"예약자: {reservation.UserName}");
+                Console.WriteLine($"차량: {reservation.VehicleName}");
+                
+                // Supabase에서 예약 삭제
+                Console.WriteLine("Supabase에서 예약 삭제 시도...");
+                var success = await SupabaseService.DeleteReservationAsync(reservationId);
+                
+                if (success)
+                {
+                    Console.WriteLine("✅ Supabase에서 예약 삭제 성공!");
+                    
+                    // 로컬 리스트에서도 제거
+                    Reservations.Remove(reservation);
+                    Console.WriteLine($"로컬 리스트에서 제거 완료. 남은 예약 수: {Reservations.Count}");
+                    
+                    // 차량 상태를 Available로 변경
+                    var vehicle = SampleVehicles.FirstOrDefault(v => v.Id == reservation.VehicleId);
+                    if (vehicle != null)
+                    {
+                        var oldStatus = vehicle.Status;
+                        vehicle.Status = "Available";
+                        vehicle.UpdatedAt = DateTime.Now;
+                        Console.WriteLine($"차량 상태 업데이트: {oldStatus} → {vehicle.Status}");
+                        Console.WriteLine($"차량명: {vehicle.Name}, 차량ID: {vehicle.Id}");
+                        
+                        // 차량 정보도 Supabase에 업데이트
+                        Console.WriteLine("Supabase에 차량 상태 업데이트 시도...");
+                        var vehicleUpdateSuccess = await SupabaseService.UpdateVehicleAsync(vehicle);
+                        
+                        if (vehicleUpdateSuccess)
+                        {
+                            Console.WriteLine("✅ 차량 상태 Supabase 업데이트 성공!");
+                        }
+                        else
+                        {
+                            Console.WriteLine("⚠️ 차량 상태 Supabase 업데이트 실패");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ 차량을 찾을 수 없음. VehicleId: {reservation.VehicleId}");
+                    }
+                    
+                    Console.WriteLine("=== 예약 취소 완료! ===");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ Supabase 삭제 실패, 로컬에서만 제거");
+                    Reservations.Remove(reservation);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"❌ 예약을 찾을 수 없음: {reservationId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ 예약 취소 오류: {ex.Message}");
+            Console.WriteLine($"오류 타입: {ex.GetType().Name}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"내부 오류: {ex.InnerException.Message}");
+            }
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task HandleReservationCompleted(string reservationId)
+    {
+        Console.WriteLine($"=== 예약 완료 처리 요청 ===");
+        Console.WriteLine($"예약 ID: {reservationId}");
+        
+        try
+        {
+            var reservation = Reservations.FirstOrDefault(r => r.Id == reservationId);
+            if (reservation != null)
+            {
+                Console.WriteLine($"예약자: {reservation.UserName}");
+                Console.WriteLine($"차량: {reservation.VehicleName}");
+                
+                var oldStatus = reservation.Status;
+                reservation.Status = "completed";
+                reservation.UpdatedAt = DateTime.Now;
+                
+                Console.WriteLine($"상태 변경: {oldStatus} → {reservation.Status}");
+                
+                // Supabase에 예약 상태 업데이트
+                Console.WriteLine("Supabase에 예약 완료 상태 업데이트 시도...");
+                var success = await SupabaseService.UpdateReservationAsync(reservation);
+                
+                if (success)
+                {
+                    Console.WriteLine("✅ Supabase에 예약 완료 상태 저장 성공!");
+                    
+                    // 차량 상태를 Available로 변경
+                    var vehicle = SampleVehicles.FirstOrDefault(v => v.Id == reservation.VehicleId);
+                    if (vehicle != null)
+                    {
+                        var oldVehicleStatus = vehicle.Status;
+                        vehicle.Status = "Available";
+                        vehicle.UpdatedAt = DateTime.Now;
+                        Console.WriteLine($"차량 상태 업데이트: {oldVehicleStatus} → {vehicle.Status}");
+                        Console.WriteLine($"차량명: {vehicle.Name}, 차량ID: {vehicle.Id}");
+                        
+                        // 차량 정보도 Supabase에 업데이트
+                        Console.WriteLine("Supabase에 차량 상태 업데이트 시도...");
+                        var vehicleUpdateSuccess = await SupabaseService.UpdateVehicleAsync(vehicle);
+                        
+                        if (vehicleUpdateSuccess)
+                        {
+                            Console.WriteLine("✅ 차량 상태 Supabase 업데이트 성공!");
+                        }
+                        else
+                        {
+                            Console.WriteLine("⚠️ 차량 상태 Supabase 업데이트 실패");
+                        }
+                        
+                        // UI 새로고침을 위한 StateHasChanged 호출
+                        StateHasChanged();
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ 차량을 찾을 수 없음. VehicleId: {reservation.VehicleId}");
+                        Console.WriteLine($"전체 차량 수: {SampleVehicles.Count}");
+                        foreach (var v in SampleVehicles)
+                        {
+                            Console.WriteLine($"  - 차량 ID: {v.Id}, 이름: {v.Name}");
+                        }
+                    }
+                    
+                    Console.WriteLine("=== 예약 완료 처리 완료! ===");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️ Supabase 업데이트 실패, 로컬에만 반영");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"❌ 예약을 찾을 수 없음: {reservationId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ 예약 완료 처리 오류: {ex.Message}");
+            Console.WriteLine($"오류 타입: {ex.GetType().Name}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"내부 오류: {ex.InnerException.Message}");
+            }
+        }
+        
+        StateHasChanged();
+    }
+
+    // 자동 완료 처리 타이머
+    private async Task StartAutoCompletionTimer()
+    {
+        while (true)
+        {
+            try
+            {
+                await CheckAndCompleteExpiredReservations();
+                await Task.Delay(TimeSpan.FromMinutes(1)); // 1분마다 실행
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"자동 완료 처리 오류: {ex.Message}");
+                await Task.Delay(TimeSpan.FromMinutes(5)); // 오류 시 5분 후 재시도
+            }
+        }
+    }
+
+    // 만료된 예약 자동 완료 처리
+    private async Task CheckAndCompleteExpiredReservations()
+    {
+        var now = DateTime.Now;
+        var expiredReservations = Reservations
+            .Where(r => r.Status != "cancelled" && r.Status != "completed" && 
+                       r.EndDateTime < now)
+            .ToList();
+
+        if (expiredReservations.Any())
+        {
+            Console.WriteLine($"=== 자동 완료 처리 시작: {expiredReservations.Count}개 예약 ===");
+            
+            foreach (var reservation in expiredReservations)
+            {
+                try
+                {
+                    Console.WriteLine($"자동 완료 처리: {reservation.UserName} - {reservation.VehicleName}");
+                    
+                    // 예약 상태를 완료로 변경
+                    var oldStatus = reservation.Status;
+                    reservation.Status = "completed";
+                    reservation.UpdatedAt = now;
+                    
+                    Console.WriteLine($"상태 변경: {oldStatus} → completed (자동)");
+                    
+                    // Supabase에 예약 상태 업데이트
+                    var reservationUpdateSuccess = await SupabaseService.UpdateReservationAsync(reservation);
+                    
+                    if (reservationUpdateSuccess)
+                    {
+                        Console.WriteLine("✅ 예약 자동 완료 Supabase 업데이트 성공!");
+                        
+                        // 차량 상태를 Available로 변경
+                        var vehicle = SampleVehicles.FirstOrDefault(v => v.Id == reservation.VehicleId);
+                        if (vehicle != null)
+                        {
+                            var oldVehicleStatus = vehicle.Status;
+                            vehicle.Status = "Available";
+                            vehicle.UpdatedAt = now;
+                            
+                            Console.WriteLine($"차량 상태 자동 업데이트: {oldVehicleStatus} → Available");
+                            
+                            // 차량 정보도 Supabase에 업데이트
+                            var vehicleUpdateSuccess = await SupabaseService.UpdateVehicleAsync(vehicle);
+                            
+                            if (vehicleUpdateSuccess)
+                            {
+                                Console.WriteLine("✅ 차량 상태 자동 업데이트 Supabase 성공!");
+                            }
+                            else
+                            {
+                                Console.WriteLine("⚠️ 차량 상태 자동 업데이트 Supabase 실패");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"❌ 차량을 찾을 수 없음. VehicleId: {reservation.VehicleId}");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("⚠️ 예약 자동 완료 Supabase 업데이트 실패");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"예약 자동 완료 처리 오류 ({reservation.Id}): {ex.Message}");
+                }
+            }
+            
+            Console.WriteLine("=== 자동 완료 처리 완료 ===");
+            
+            // UI 새로고침
+            StateHasChanged();
+        }
+    }
+}

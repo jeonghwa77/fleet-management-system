@@ -1,0 +1,125 @@
+@using FleetManagementSystem4.Shared.Models
+
+<div class="p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-foreground">차량 관리</h1>
+        <button @onclick="ShowAddModal"
+                class="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-2">
+            <span>+</span>
+            <span>차량 추가</span>
+        </button>
+    </div>
+
+    <!-- 차량 목록 -->
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        @foreach (var vehicle in vehicles)
+        {
+            <div class="bg-card border border-border rounded-lg p-4">
+                <h3 class="font-semibold text-foreground">@vehicle.Name</h3>
+                <p class="text-sm text-muted-foreground">@vehicle.Type</p>
+                <p class="text-sm text-muted-foreground">@vehicle.LicensePlate</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- 차량 추가 모달 -->
+@if (showAddDialog)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-4">새 차량 추가</h2>
+                
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                        @error
+                    </div>
+                }
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">차량명 *</label>
+                        <input @bind="vehicleName" 
+                               class="w-full px-3 py-2 border rounded-lg"
+                               placeholder="예: 현대 그랜저" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">차종 *</label>
+                        <input @bind="vehicleType" 
+                               class="w-full px-3 py-2 border rounded-lg"
+                               placeholder="예: 승용차" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">번호판 *</label>
+                        <input @bind="vehiclePlate" 
+                               class="w-full px-3 py-2 border rounded-lg"
+                               placeholder="예: 서울12가3456" />
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button @onclick="CloseAddModal" 
+                            class="px-4 py-2 border rounded-lg">취소</button>
+                    <button @onclick="HandleAddVehicle" 
+                            class="px-4 py-2 bg-blue-500 text-white rounded-lg">추가</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public List<Vehicle> vehicles { get; set; } = new();
+    [Parameter] public EventCallback<Vehicle> onAdd { get; set; }
+
+    private bool showAddDialog = false;
+    private string vehicleName = "";
+    private string vehicleType = "";
+    private string vehiclePlate = "";
+    private string error = "";
+
+    private void ShowAddModal()
+    {
+        vehicleName = "";
+        vehicleType = "";
+        vehiclePlate = "";
+        error = "";
+        showAddDialog = true;
+    }
+
+    private void CloseAddModal()
+    {
+        showAddDialog = false;
+    }
+
+    private async Task HandleAddVehicle()
+    {
+        if (string.IsNullOrEmpty(vehicleName) || string.IsNullOrEmpty(vehicleType) || string.IsNullOrEmpty(vehiclePlate))
+        {
+            error = "모든 필드를 입력해주세요.";
+            return;
+        }
+
+        var newVehicle = new Vehicle
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = vehicleName,
+            Type = vehicleType,
+            LicensePlate = vehiclePlate,
+            Status = "Available",
+            CreatedAt = DateTime.Now,
+            UpdatedAt = DateTime.Now
+        };
+
+        if (onAdd.HasDelegate)
+        {
+            await onAdd.InvokeAsync(newVehicle);
+        }
+
+        CloseAddModal();
+    }
+}
