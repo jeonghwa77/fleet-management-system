@@ -25,13 +25,10 @@ jobs:
           dotnet-version: '9.0.x'
       
       - name: Restore dependencies
-        run: dotnet restore FleetManagementSystem4.sln
+        run: dotnet restore FleetManagementSystem4/FleetManagementSystem4.Web/FleetManagementSystem4.Web.csproj
       
-      - name: Build
-        run: dotnet build FleetManagementSystem4.sln --no-restore
-      
-      - name: Publish Blazor WebAssembly
-        run: dotnet publish FleetManagementSystem4/FleetManagementSystem4/FleetManagementSystem4.csproj -c Release -f net9.0-webassembly -o output
+      - name: Build and Publish Web Project
+        run: dotnet publish FleetManagementSystem4/FleetManagementSystem4.Web/FleetManagementSystem4.Web.csproj -c Release -o output
       
       - name: Build And Deploy
         id: builddeploy
