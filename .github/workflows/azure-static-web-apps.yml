@@ -28,7 +28,7 @@ jobs:
         run: dotnet restore FleetManagementSystem4/FleetManagementSystem4.Web/FleetManagementSystem4.Web.csproj
       
       - name: Build and Publish Web Project
-        run: dotnet publish FleetManagementSystem4/FleetManagementSystem4.Web/FleetManagementSystem4.Web.csproj -c Release -o output
+        run: dotnet publish FleetManagementSystem4/FleetManagementSystem4.Web/FleetManagementSystem4.Web.csproj -c Release -o output --framework net9.0
       
       - name: Build And Deploy
         id: builddeploy
@@ -39,6 +39,7 @@ jobs:
           action: "upload"
           app_location: "output/wwwroot"
           skip_app_build: true
+          skip_deploy_on_missing_secrets: true
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
